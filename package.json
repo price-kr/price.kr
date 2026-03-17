@@ -1,0 +1,12 @@
+{
+  "name": "price-kr",
+  "private": true,
+  "workspaces": ["workers", "web", "scripts"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  }
+}

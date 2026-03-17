@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+.vercel
+.wrangler/
+*.tsbuildinfo
+.env
+.env.local
+.dev.vars
