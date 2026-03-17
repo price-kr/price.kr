@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-03-17 ~15:50 — Task 4: Next.js Web App 완료
+
+**작업 내용:**
+- `web/` 워크스페이스 수동 생성 (create-next-app 대신 — interactive prompt 회피)
+- Next.js 15 App Router: layout.tsx (Korean OG meta), page.tsx (검색 UI), [keyword]/page.tsx, privacy/page.tsx
+- SearchBar 클라이언트 컴포넌트 (자동완성, 초성 검색)
+- lib/hangul.ts (웹용 초성 추출/검색), lib/keywords.ts (JSON 데이터 로더, server-only)
+- vitest.config.ts + jsdom 환경, @testing-library/react
+- 7개 테스트 전부 통과
+
+**기술적 결정:**
+
+### 1. create-next-app 대신 수동 프로젝트 구성
+- **결정:** `create-next-app`의 interactive prompt(React Compiler 질문)를 피하기 위해 수동으로 package.json, tsconfig.json 등 생성
+- **이유:** CI/sandbox 환경에서 interactive prompt가 hang됨
+
+### 2. `outputFileTracingIncludes`로 data/ 디렉토리 명시적 포함
+- **결정:** `next.config.ts`에 `outputFileTracingIncludes: { "/*": ["../data/**/*"] }` 추가
+- **이유:** `outputFileTracingRoot`만으로는 `data/` 파일이 Vercel serverless 번들에 포함되지 않음. Vercel에서 `process.cwd()`는 `/var/task`를 반환하므로 `../data`가 존재해야 함
+- **검토:** data/를 web/ 안에 이동하는 것도 고려했으나, workers/와 scripts/에서도 참조하므로 monorepo 루트에 유지
+
+### 3. `getDataDir()` 함수화
+- **결정:** `[keyword]/page.tsx`에서 `dataDir`를 모듈 스코프 상수에서 함수 호출로 변경
+- **이유:** 모듈 스코프의 `process.cwd()` 호출은 import 시점에 평가되어 빌드/edge 환경에서 예상과 다를 수 있음
+
+---
+
 ## 2026-03-17 ~15:45 — Task 3: Cloudflare Workers Redirect Engine 완료
 
 **작업 내용:**
