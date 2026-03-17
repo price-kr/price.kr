@@ -4,6 +4,22 @@
 
 ---
 
+## 2026-03-17 ~16:00 — Tasks 9-16: GitHub Actions, Seed Data, Docs 일괄 완료
+
+**작업 내용:**
+- Task 9: `validate-issue.yml` — Issue 파싱 → 키워드/URL 유효성 검증 (blocklist+jamo, whitelist, Safe Browsing) → 자동 PR 생성
+- Task 10: `sync-kv.yml` — main push 시 incremental/full KV 동기화 + 삭제 처리
+- Task 11: `auto-merge.yml` — 6시간마다 투표 확인, admin-approved 즉시 병합, PR 생성자 투표 제외
+- Task 12: Task 4에서 이미 완료 (layout.tsx Korean OG meta + next.config.ts)
+- Task 13: `seed-data.ts` — TSV 입력으로 키워드 JSON 파일 일괄 생성 + 3개 테스트
+- Task 14: 전체 스모크 테스트 — **43 tests, 11 files, ALL PASS**
+- Task 15: `delete-keyword.yml` 삭제 요청 템플릿 + `.github/CODEOWNERS`
+- Task 16: `CONTRIBUTING.md` (sparse checkout 가이드 포함) + `README.md` 업데이트
+
+**기술적 결정:** 없음 — 플랜대로 실행. GitHub Actions workflow는 YAML 파일이므로 유닛 테스트 불가, 실제 리포 배포 후 검증 필요.
+
+---
+
 ## 2026-03-17 ~15:55 — Tasks 5-8: 데이터/설정 태스크 일괄 완료
 
 **작업 내용:**

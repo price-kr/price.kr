@@ -1,0 +1,5 @@
+# Require admin approval for blocklist/whitelist/profanity changes
+data/blocklist.json @laeyoung
+data/whitelist.json @laeyoung
+data/profanity-blocklist.json @laeyoung
+.github/workflows/ @laeyoung
