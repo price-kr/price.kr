@@ -53,6 +53,21 @@ Path computation: Korean → `data/{초성}/{첫글자}/{keyword}.json`, English
 
 Hangul choseong extraction uses Unicode math: `CHOSEONG_LIST[Math.floor((charCode - 0xAC00) / 588)]`
 
+## Required: Development Tracking
+
+### `docs/DEV_PROGRESS.md` — 개발 진행 상황
+- Phase별 태스크 목록과 상태(✅ 완료 / 🔧 진행 중 / ⬜ 미착수)를 관리한다.
+- **태스크를 시작할 때** 해당 항목을 🔧 진행 중으로, **완료 시** ✅ 완료로 업데이트한다.
+- 비고 란에 간단한 요약을 적는다.
+
+### `docs/DEV_LOG.md` — 개발 로그
+- 개발 과정의 주요 내용, 기술적 결정, 검토 사항을 **블로그 형식(최신이 위)**으로 기록한다.
+- 각 엔트리에 **날짜와 대략적 시각**을 포함한다 (예: `## 2026-03-17 ~14:40`).
+- 기술적 결정이 있었다면 **결정 내용, 이유, 검토한 대안**을 함께 적는다.
+- 단순 코드 작성뿐 아니라 아키텍처 변경, 의존성 선택, 트레이드오프 등 이후 개발자가 "왜 이렇게 했지?"라고 물을 만한 것을 기록한다.
+
+**이 두 파일은 매 태스크 작업 시 반드시 업데이트해야 한다.**
+
 ## Language
 
 PRD and user-facing content are in Korean. Code comments and commit messages are in English.
