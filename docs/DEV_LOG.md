@@ -4,6 +4,38 @@
 
 ---
 
+## 2026-03-17 ~15:45 — Task 3: Cloudflare Workers Redirect Engine 완료
+
+**작업 내용:**
+- `workers/` 워크스페이스 설정 (package.json, wrangler.toml, tsconfig.json)
+- `subdomain.ts`: Host 헤더에서 서브도메인 추출 + punycode 디코딩
+- `fallback.ts`: KV 장애 시 GitHub Raw Content 폴백 (Cache API 활용)
+- `index.ts`: 메인 핸들러 — KV 조회 → 302 리다이렉트, 실패 시 폴백, 에러 페이지
+- 16개 테스트 전부 통과 (unit test 방식, mock KV)
+
+**기술적 결정:**
+
+### 1. `punycode` import 경로: trailing slash 제거
+- **결정:** `import punycode from "punycode"` (slash 없이)
+- **이유:** Cloudflare Workers는 Node.js 런타임이 아님. trailing slash(`punycode/`)는 Node.js에서 npm 패키지를 명시적으로 로드하는 트릭이지만, Wrangler의 esbuild 번들러는 `punycode`만으로도 npm 패키지를 올바르게 resolve
+- **검토:** `node_compat = true` 없이도 esbuild가 npm 의존성을 번들에 포함시킴
+
+### 2. 테스트 환경: `@cloudflare/vitest-pool-workers` 대신 일반 vitest
+- **결정:** Workers 전용 vitest pool 대신 표준 vitest + mock KV 사용
+- **이유:** 현 환경(Linux arm64)에서 vitest-pool-workers 실행 시 segfault 발생. esbuild postinstall도 일부 실패
+- **영향:** `caches.default`, KVNamespace 등 CF Workers API는 수동 mock. 프로덕션 동작 검증은 `wrangler dev`로 별도 수행 필요
+
+### 3. Korean URL in Location 헤더: Node.js ByteString 제약
+- **결정:** 테스트에서 KV 값에 URL-encoded 쿼리 파라미터 사용
+- **이유:** Node.js의 `Response` 구현은 HTTP 헤더에 non-ASCII 문자(ByteString 범위 초과) 허용 안 함. CF Workers 런타임은 허용하므로 프로덕션에서는 문제없음
+- **검토:** 실제 KV 데이터에는 URL-encoded 값을 저장하면 양쪽 모두 호환
+
+### 4. Fallback URL 경로 인코딩
+- **결정:** `buildFallbackUrl`에서 경로 세그먼트별 `encodeURIComponent` 적용
+- **이유:** 한글 디렉토리명(`ㅁ/만/만두.json`)이 raw URL로 전달되면 `fetch()` 동작이 런타임에 따라 다를 수 있음
+
+---
+
 ## 2026-03-17 ~15:30 — Task 2: Hangul Utilities 완료
 
 **작업 내용:**
