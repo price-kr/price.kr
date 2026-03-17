@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-03-17 ~15:30 — Task 2: Hangul Utilities 완료
+
+**작업 내용:**
+- `scripts/` 워크스페이스 설정 (package.json, tsconfig.json, vitest.config.ts)
+- `hangul-path.ts`: 초성 추출(`getChoseong`) + 키워드→파일 경로 계산(`getKeywordPath`)
+- `validate-keyword.ts`: NFC 정규화, 금지어 검사, 자모(ㅋㅍ) 우회 탐지
+- 16개 테스트 전부 통과
+
+**기술적 결정:**
+
+### 1. vitest 3.x → 2.x 다운그레이드
+- **결정:** vitest `^2.1.8` 사용 (플랜은 `^3.0.0` 명시)
+- **이유:** vitest 3.x가 현 환경(Linux arm64)에서 Segmentation fault 발생. 2.x는 정상 동작
+- **영향:** Workers 워크스페이스도 `@cloudflare/vitest-pool-workers`와 vitest 2.x 사용 예정이므로 버전 일관성 확보
+
+### 2. 빈 문자열 방어 추가
+- **결정:** `getKeywordPath("")` 호출 시 `throw Error` (플랜에는 없었음)
+- **이유:** 리뷰에서 발견 — `keyword[0]`이 `undefined`가 되어 `charCodeAt` 호출 시 TypeError 발생
+- **검토:** 빈 문자열은 상위 레이어(Workers의 `extractSubdomain`, Actions의 regex)에서 걸러지지만, 방어적 프로그래밍으로 추가
+
+### 3. 자모(ㅋㅍ) 키워드의 파일 경로 라우팅
+- **결정:** 호환성 자모(U+3131-U+314E)로 시작하는 키워드는 `_en` 디렉토리로 라우팅
+- **이유:** `getChoseong`은 조합형 음절(U+AC00-U+D7A3)만 인식. 독립 자모는 조합형 범위 밖이므로 한글로 분류 불가
+- **검토 대안:** 자모 전용 디렉토리(`_jamo/`) 추가 고려 → 실사용 시나리오가 거의 없으므로 과잉 설계로 판단
+
+---
+
 ## 2026-03-17 ~14:40 — Task 1: Project Scaffolding 완료
 
 **작업 내용:**
