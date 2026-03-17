@@ -1,0 +1,36 @@
+name: "키워드 삭제 요청"
+description: "기존 키워드의 삭제를 요청합니다 (링크 깨짐, 저작권 침해, 악성 사이트 등)"
+title: "[키워드 삭제] "
+labels: ["keyword-delete"]
+body:
+  - type: input
+    id: keyword
+    attributes:
+      label: "삭제할 키워드"
+      placeholder: "삭제 대상 키워드"
+    validations:
+      required: true
+  - type: dropdown
+    id: reason_type
+    attributes:
+      label: "삭제 사유"
+      options:
+        - "링크 깨짐 (Dead link)"
+        - "저작권/상표권 침해"
+        - "악성/피싱 사이트로 변질"
+        - "기타"
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: "상세 설명"
+      description: "삭제가 필요한 구체적인 이유를 설명해 주세요"
+    validations:
+      required: true
+  - type: checkboxes
+    id: urgent
+    attributes:
+      label: "긴급 삭제 요청"
+      options:
+        - label: "피싱/악성 사이트로 인한 긴급 삭제가 필요합니다 (관리자 단독 승인 처리)"

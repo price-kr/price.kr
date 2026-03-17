@@ -4,6 +4,18 @@
 
 ---
 
+## 2026-03-17 ~15:55 — Tasks 5-8: 데이터/설정 태스크 일괄 완료
+
+**작업 내용:**
+- Task 5: 샘플 키워드 데이터 (만두, 가방, iphone) JSON 파일 생성
+- Task 6: `sync-kv.ts` — JSON → Cloudflare KV 동기화 스크립트 + `buildKvEntries` 테스트
+- Task 7: GitHub Issue 템플릿 3종 (새 단어 제안, 변경 요청, 삭제 요청)
+- Task 8: `blocklist.json` (상표명 8개), `whitelist.json` (11개 도메인), `profanity-blocklist.json` (비속어 8개)
+
+**기술적 결정:** 없음 (플랜대로 실행). 데이터/설정 파일이므로 별도 에이전트 리뷰 생략.
+
+---
+
 ## 2026-03-17 ~15:50 — Task 4: Next.js Web App 완료
 
 **작업 내용:**
