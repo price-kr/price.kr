@@ -18,12 +18,18 @@ function isSafeRedirectUrl(url: string): boolean {
   }
 }
 
-function redirect302(url: string): Response {
+function redirect302(url: string, isCacheable: boolean = false): Response {
   return new Response(null, {
     status: 302,
     headers: {
       Location: url,
-      "Cache-Control": "private, no-store",
+      "Cache-Control": isCacheable ? "public, max-age=3600, s-maxage=3600, immutable" : "private, no-store", // FIXME: env.CACHE_MAX_AGE=3600
+      // NOTE(minho@): 3600s (1h) is a reasonable cache duration for valid redirects, balancing freshness with performance.
+      //    The `immutable` directive allows browsers to cache the response without revalidation, which is suitable since the redirect target for a given keyword is not expected to change frequently.
+      //    For Cloudflare's edge caching, the `s-maxage` directive ensures that Cloudflare caches the response for 1 hour as well.
+      // NOTE(cf-edge): default: 20m on 302 responses -- https://developers.cloudflare.com/cache/concepts/default-cache-behavior/#edge-ttl
+      "Cache-Tag": "x-cacheable-redirect",
+      // NOTE(cf-cache): purge via tag -- https://developers.cloudflare.com/cache/how-to/purge-cache/purge-by-tags/
     },
   });
 }
@@ -50,7 +56,19 @@ function errorPage(webAppOrigin: string): Response {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // @ts-ignore - Cloudflare Workers runtime provides `caches` globally, but TypeScript doesn't know about it
+    const cache = caches.default;
+    const cacheKey = request.url; // FIXME(minho@): possible cache-miss attack surface is here. need to strip query params and fragments, or unused path segments. (just use the unfiltered '//domain/keyword' or '//keyword.domain/' as cache key.)
+    let response = await cache.match(cacheKey);
+    if (!response) {
+      response = await this._fetch_keyword(request, env);
+      ctx.waitUntil(cache.put(cacheKey, response.clone()).catch(() => {/* noop: non cacheable will failed it here. */}));
+    }
+    return response;
+  },
+
+  async _fetch_keyword(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const host = request.headers.get("Host") ?? url.hostname;
 
@@ -86,9 +104,9 @@ export default {
       }
     }
 
-    // 3. Redirect if we found a valid URL
+    // 3. Redirect if we found a valid URL and cache it 1hr in client and cf-edge.
     if (targetUrl && isSafeRedirectUrl(targetUrl)) {
-      return redirect302(targetUrl);
+      return redirect302(targetUrl, true);
     }
 
     // 4. Invalid URL in KV/fallback — show error page

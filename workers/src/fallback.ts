@@ -42,11 +42,9 @@ export async function fetchFallback(
   githubRawBase: string,
   githubToken?: string
 ): Promise<string | null> {
-  const url = buildFallbackUrl(keyword, githubRawBase);
-
   // Check Cache API first
-  const cache = caches.default;
-  const cacheKey = new Request(url);
+  const cache = await caches.open("github-raw-contents");
+  const cacheKey = new Request(keyword);
   const cached = await cache.match(cacheKey);
   if (cached) {
     const text = await cached.text();
@@ -54,6 +52,7 @@ export async function fetchFallback(
   }
 
   // Fetch from GitHub
+  const url = buildFallbackUrl(keyword, githubRawBase);
   const headers: Record<string, string> = { "User-Agent": "price-kr-worker" };
   if (githubToken) {
     headers["Authorization"] = `token ${githubToken}`;
@@ -67,13 +66,12 @@ export async function fetchFallback(
 
   // Cache for 5 minutes
   const responseToCache = new Response(text, {
-    headers: { "Cache-Control": "public, max-age=300" },
+    headers: {
+      "Cache-Control": "public, max-age=300, s-maxage=300", // NOTE(cf-cache): s-maxage for edge caching, max-age for browser caching.
+      "Cache-Tag": "github-raw-contents",
+    },
   });
-  try {
-    await cache.put(cacheKey, responseToCache);
-  } catch {
-    // Cache write failure is non-critical
-  }
+  await cache.put(cacheKey, responseToCache).catch(() => { /* noop: cache put failure shouldn't block the response */ });
 
   return parseKeywordJson(text);
 }
