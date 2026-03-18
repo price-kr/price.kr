@@ -74,23 +74,115 @@ price.kr/
 
 `admin-approved` 라벨이 있는 PR은 투표/대기 없이 즉시 병합됩니다.
 
-## 로컬 개발
+## 셋업 가이드
+
+### 1. 사전 요구사항
+
+- Node.js 20+
+- [Cloudflare 계정](https://dash.cloudflare.com/) (Workers + KV 무료 플랜)
+- [Vercel 계정](https://vercel.com/) (웹앱 배포용, 무료 플랜)
+- 도메인 (`가격.kr` / `xn--o39a88s.kr`) — Cloudflare DNS에 등록
+
+### 2. 의존성 설치
 
 ```bash
-# 의존성 설치
+git clone https://github.com/laeyoung/price.kr.git
+cd price.kr
 npm install
+```
 
-# Workers 로컬 개발
+### 3. Cloudflare Workers 설정
+
+```bash
+# Wrangler CLI 설치 (전역)
+npm install -g wrangler
+
+# Cloudflare 로그인
+wrangler login
+
+# KV 네임스페이스 생성
+wrangler kv namespace create KEYWORDS
+wrangler kv namespace create KEYWORDS --preview
+```
+
+생성된 ID를 `workers/wrangler.toml`에 반영:
+
+```toml
+[[kv_namespaces]]
+binding = "KEYWORDS"
+id = "<위에서 생성된 KV namespace ID>"
+preview_id = "<위에서 생성된 preview ID>"
+```
+
+도메인 라우팅이 준비되면 `routes` 주석도 해제:
+
+```toml
+routes = [
+  { pattern = "*.xn--o39a88s.kr", zone_name = "xn--o39a88s.kr" }
+]
+```
+
+**(선택)** GitHub Raw Content 폴백의 rate limit을 확장하려면 (60 → 5,000 req/hr):
+
+```bash
+wrangler secret put GITHUB_TOKEN
+# GitHub Personal Access Token 입력 (public repo read 권한)
+```
+
+### 4. GitHub Repository Secrets
+
+GitHub repo → Settings → Secrets and variables → Actions에서 설정:
+
+| Secret | 용도 | 필수 여부 |
+|--------|------|----------|
+| `CLOUDFLARE_API_TOKEN` | Wrangler가 KV에 write하기 위한 Cloudflare API 토큰 | **필수** |
+| `CF_KV_NAMESPACE_ID` | 3단계에서 생성한 KV namespace ID | **필수** |
+| `GOOGLE_SAFE_BROWSING_API_KEY` | Issue 등록 시 URL 안전성 검증 ([발급](https://developers.google.com/safe-browsing/v4/get-started)) | 선택 (없으면 검증 skip) |
+
+**Cloudflare API 토큰 생성:**
+1. [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) 페이지
+2. "Create Token" → "Edit Cloudflare Workers" 템플릿 사용
+3. 권한에 `Account - Workers KV Storage - Edit` 추가
+4. 생성된 토큰을 `CLOUDFLARE_API_TOKEN` 시크릿에 저장
+
+### 5. Vercel 배포
+
+```bash
+# Vercel CLI 설치 및 프로젝트 연결
+npm install -g vercel
+cd web
+vercel link
+```
+
+Vercel 대시보드에서 설정:
+- **Framework Preset:** Next.js
+- **Root Directory:** `web`
+- **Build Command:** (기본값 사용)
+
+> Vercel 웹앱은 환경 변수가 필요 없습니다. 데이터는 빌드 시 파일시스템에서 직접 읽습니다.
+
+### 6. 로컬 개발
+
+```bash
+# Workers 로컬 개발 (wrangler dev)
 cd workers && npm run dev
 
-# Web 로컬 개발
+# Web 로컬 개발 (Next.js dev server)
 cd web && npm run dev
 
 # 전체 테스트 (52 tests)
 npm test
 ```
 
-**요구사항:** Node.js 20+
+### 7. 배포
+
+```bash
+# Workers 배포
+cd workers && npm run deploy
+
+# Web은 git push 시 Vercel에서 자동 배포
+# KV 동기화는 main push 시 GitHub Actions가 자동 실행
+```
 
 ## 기여하기
 

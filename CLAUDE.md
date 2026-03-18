@@ -17,7 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # All workspaces
-npm test                          # Run tests across all workspaces
+npm install                       # Install dependencies (Node 20+ required)
+npm test                          # Run tests across all workspaces (52 tests, 11 files)
 npm run lint                      # Lint across all workspaces
 
 # Workers (Cloudflare)
@@ -34,16 +35,32 @@ cd web && npx vitest run          # Run all web tests
 cd scripts && npx vitest run      # Run utility tests
 ```
 
-Workers uses `@cloudflare/vitest-pool-workers` with vitest 2.x (not 3.x — pool-workers compatibility).
+Workers uses vitest 2.x with manual mocks (KV, Cache API, fetch). `@cloudflare/vitest-pool-workers` is listed as a devDependency but not configured — tests run in plain Node.js. Phase 2 goal: switch to pool-workers for runtime-accurate testing.
 
 ## Key Architecture Decisions
 
 - **Korean subdomain routing:** Browser sends punycode in Host header → Workers decode via `punycode/` npm package → KV lookup. `extractSubdomain()` rejects multi-level subdomains and `www`.
 - **No rate limiter in Workers:** Cloudflare KV free tier (1K writes/day) is too low for per-request rate limiting. Relies on Cloudflare's built-in DDoS protection.
-- **Data path on Vercel:** `web/` accesses `data/` via `join(process.cwd(), "..", "data")` with `outputFileTracingRoot` set to the monorepo root in `next.config.ts`.
+- **Data path on Vercel:** `web/` accesses `data/` via `getDataDir()` from `web/lib/keywords.ts` (centralized). Uses `join(process.cwd(), "..", "data")` with `outputFileTracingRoot` set to the monorepo root in `next.config.ts`. All pages must import `getDataDir()` instead of inlining the path.
 - **GitHub Actions security:** All user inputs from issues are passed via `env:` blocks to `process.env`, never via `${{ }}` interpolation in script blocks. Keywords validated with `/^[가-힣ㄱ-ㅎa-zA-Z0-9]+$/` regex.
 - **English keyword case:** Always lowercased in both filename and JSON `keyword` field to ensure KV key matches filename for deletion sync.
 - **Admin approval (Phase 1):** PRs with `admin-approved` label bypass vote threshold and 24-hour wait. Regular PRs need 3+ thumbs-up (5+ for changes).
+
+## Implementation Gotchas
+
+- **Non-keyword JSON filtering:** `findJsonFiles()` in `web/lib/keywords.ts` and `scripts/sync-kv.ts` excludes `blocklist.json`, `whitelist.json`, `profanity-blocklist.json` via `NON_KEYWORD_FILES` set. Always validate parsed JSON has `keyword` and `url` string fields before use.
+- **Workers redirect security:** `isSafeRedirectUrl()` validates http/https only before 302 redirect. Subdomain dot-rejection runs after `punycode.toUnicode()` to catch Unicode dot separators. `cache.put` is wrapped in try/catch (non-critical). English subdomains are lowercased before KV lookup.
+- **Issue template field matching:** `validate-issue.yml` parsing regexes must match ALL issue template field labels. `change-keyword.yml` uses "변경할 키워드" (not "키워드") and "새로운 URL" (not "목적지 URL"). When adding/editing templates, update the workflow parsing regexes accordingly.
+- **Choseong logic duplication:** The choseong extraction + path computation is independently implemented in 5 files: `scripts/hangul-path.ts`, `scripts/validate-keyword.ts`, `workers/src/fallback.ts`, `web/lib/hangul.ts`, `.github/workflows/validate-issue.yml`. Changes must be applied to all 5 locations.
+
+## Environment Setup
+
+No `.env` files needed for local development (`npm run dev`, `npm test`).
+
+For production deployment:
+- `workers/wrangler.toml` — replace `placeholder-kv-id` and `placeholder-preview-kv-id` with real Cloudflare KV namespace IDs
+- GitHub Secrets — `CLOUDFLARE_API_TOKEN` (required), `CF_KV_NAMESPACE_ID` (required), `GOOGLE_SAFE_BROWSING_API_KEY` (optional)
+- Workers secret — `GITHUB_TOKEN` (optional, for fallback rate limit: 60→5000 req/hr)
 
 ## Data Structure
 
