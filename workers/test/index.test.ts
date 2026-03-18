@@ -96,19 +96,66 @@ describe("Worker redirect handler", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns error page when KV throws", async () => {
+  it("redirects to web app when KV throws and fallback finds nothing", async () => {
     const env = createEnv();
     (env.KEYWORDS.get as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("KV unavailable")
     );
+    // Mock global fetch to return 404 (keyword not on GitHub)
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => new Response("Not found", { status: 404 }));
+    try {
+      const req = createRequest(
+        "https://iphone.xn--o39a88s.kr/",
+        "iphone.xn--o39a88s.kr"
+      );
+      const res = await worker.fetch(req, env);
+      // KV failed, fallback returned null → redirect to web app
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe("https://xn--o39a88s.kr/iphone");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("redirects via fallback when KV returns null but GitHub has data", async () => {
+    const env = createEnv(); // empty KV
+    const fallbackJson = JSON.stringify({ keyword: "iphone", url: "https://example.com/iphone", created: "2026-01-01" });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => new Response(fallbackJson, { status: 200 }));
+    try {
+      const req = createRequest(
+        "https://iphone.xn--o39a88s.kr/",
+        "iphone.xn--o39a88s.kr"
+      );
+      const res = await worker.fetch(req, env);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe("https://example.com/iphone");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("rejects unsafe redirect URLs from KV", async () => {
+    const env = createEnv({ "iphone": "javascript:alert(1)" });
     const req = createRequest(
       "https://iphone.xn--o39a88s.kr/",
       "iphone.xn--o39a88s.kr"
     );
     const res = await worker.fetch(req, env);
-    // Falls through to fallback, which also fails (no real fetch) → error page
     expect(res.status).toBe(503);
     const html = await res.text();
     expect(html).toContain("일시적인 오류가 발생했습니다");
+  });
+
+  it("lowercases English subdomains for consistent KV lookup", async () => {
+    const env = createEnv({ "iphone": "https://example.com/iphone" });
+    const req = createRequest(
+      "https://iPhone.xn--o39a88s.kr/",
+      "iPhone.xn--o39a88s.kr"
+    );
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("https://example.com/iphone");
   });
 });

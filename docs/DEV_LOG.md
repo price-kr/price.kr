@@ -4,6 +4,52 @@
 
 ---
 
+## 2026-03-18 ~09:30 — Phase 1 전체 코드 리뷰 및 수정
+
+**작업 내용:**
+5개 전문 리뷰 에이전트(Workers, Web, Scripts, Actions, Data/Config)를 병렬 배치하여 Phase 1 전체 코드를 상세 검토.
+Critical 5건, Important 10+건, Suggestion 10+건 발견. Critical과 주요 Important 이슈를 즉시 수정.
+
+**수정된 Critical 이슈:**
+
+### 1. Open Redirect 취약점 방지 (workers/src/index.ts)
+- **문제:** KV/fallback에서 가져온 URL에 대한 검증 없이 302 리다이렉트. `javascript:`, `data:` 등 위험한 스키마로 리다이렉트 가능.
+- **수정:** `isSafeRedirectUrl()` 함수 추가 — `http:`/`https:` 프로토콜만 허용. 위험한 URL은 503 에러 페이지 반환.
+
+### 2. Fallback 로직 오류 수정 (workers/src/index.ts)
+- **문제:** GitHub Raw Content fallback이 KV 예외(throw) 시에만 시도됨. KV가 `null` 반환(키 미존재) 시 fallback 미시도 → PRD 8.2 가용성 요구사항 미충족.
+- **수정:** KV miss(`null`)와 KV error 모두에서 fallback 시도하도록 제어 흐름 재구성.
+- **영향:** 기존 테스트 1개 업데이트 + 새 테스트 4개 추가 (fallback 성공, unsafe URL 거부, 소문자 정규화).
+
+### 3. 영문 키워드 소문자 정규화 (workers/src/index.ts)
+- **문제:** `extractSubdomain` 결과를 그대로 KV lookup에 사용. DNS가 대소문자 보존 시 `iPhone` ≠ `iphone` 불일치.
+- **수정:** KV lookup 전 `.toLowerCase()` 적용. 한글은 영향 없음(no-op).
+
+### 4. blocklist/whitelist JSON 파일 혼입 (web + scripts)
+- **문제:** `findJsonFiles()`가 `data/` 내 모든 `.json` 파일을 재귀 수집. `blocklist.json`, `whitelist.json`, `profanity-blocklist.json`은 배열 형태로 KeywordEntry 스키마와 불일치 → `undefined` 키워드 생성, KV에 garbage 데이터 write.
+- **수정:** `NON_KEYWORD_FILES` Set으로 제외 + JSON 파싱 시 `keyword`/`url` 필드 존재 여부 검증. malformed JSON은 skip.
+
+### 5. validate-issue.yml null body 가드 (GitHub Actions)
+- **문제:** `context.payload.issue.body`가 API로 빈 본문 Issue 생성 시 `null` → `.match()` 호출에서 TypeError.
+- **수정:** `const body = context.payload.issue.body || '';`
+
+**수정된 Important 이슈:**
+- `[keyword]/page.tsx`: `generateMetadata` 추가 (SEO — 키워드별 고유 title/description)
+- `privacy/page.tsx`: 메타데이터 export 추가
+- `SearchBar.tsx`: onBlur 핸들러, 키보드 내비게이션(ArrowUp/Down, Enter, Escape), ARIA combobox 패턴 적용, URL 구성 전 키워드 정규식 검증
+
+**테스트 결과:** 46 tests, 11 files, ALL PASS (Workers 19 + Web 7 + Scripts 20)
+
+**미수정 잔여 이슈 (Phase 2 고려):**
+- 코드 중복: choseong/path 로직이 5곳에 독립 구현 (shared 패키지 추출 고려)
+- `sync-kv.yml` full sync가 additive-only (stale KV entry 미삭제)
+- `keyword-delete` 이슈 라벨에 대한 워크플로우 미구현
+- `web/tsconfig.json`이 `tsconfig.base.json` 미확장
+- blocklist 확대 필요 (현재 8개 브랜드명)
+- `_num/` 디렉토리 샘플 데이터 미존재
+
+---
+
 ## 2026-03-17 ~16:00 — Tasks 9-16: GitHub Actions, Seed Data, Docs 일괄 완료
 
 **작업 내용:**

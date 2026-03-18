@@ -8,6 +8,12 @@ export interface KeywordEntry {
   created: string;
 }
 
+const NON_KEYWORD_FILES = new Set([
+  "blocklist.json",
+  "whitelist.json",
+  "profanity-blocklist.json",
+]);
+
 async function findJsonFiles(dir: string): Promise<string[]> {
   const results: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
@@ -15,7 +21,7 @@ async function findJsonFiles(dir: string): Promise<string[]> {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...(await findJsonFiles(fullPath)));
-    } else if (entry.name.endsWith(".json")) {
+    } else if (entry.name.endsWith(".json") && !NON_KEYWORD_FILES.has(entry.name)) {
       results.push(fullPath);
     }
   }
@@ -29,8 +35,15 @@ export async function loadAllKeywords(
   const entries: KeywordEntry[] = [];
 
   for (const file of files) {
-    const content = await readFile(file, "utf-8");
-    entries.push(JSON.parse(content));
+    try {
+      const content = await readFile(file, "utf-8");
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed.keyword === "string" && typeof parsed.url === "string") {
+        entries.push(parsed);
+      }
+    } catch {
+      // Skip malformed JSON files
+    }
   }
 
   return entries;

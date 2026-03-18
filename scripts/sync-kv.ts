@@ -6,6 +6,12 @@ export interface KvEntry {
   value: string;
 }
 
+const NON_KEYWORD_FILES = new Set([
+  "blocklist.json",
+  "whitelist.json",
+  "profanity-blocklist.json",
+]);
+
 async function findJsonFiles(dir: string): Promise<string[]> {
   const results: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
@@ -13,7 +19,7 @@ async function findJsonFiles(dir: string): Promise<string[]> {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...(await findJsonFiles(fullPath)));
-    } else if (entry.name.endsWith(".json")) {
+    } else if (entry.name.endsWith(".json") && !NON_KEYWORD_FILES.has(entry.name)) {
       results.push(fullPath);
     }
   }
@@ -25,9 +31,15 @@ export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {
   const entries: KvEntry[] = [];
 
   for (const file of files) {
-    const content = await readFile(file, "utf-8");
-    const data = JSON.parse(content);
-    entries.push({ key: data.keyword, value: data.url });
+    try {
+      const content = await readFile(file, "utf-8");
+      const data = JSON.parse(content);
+      if (data && typeof data.keyword === "string" && typeof data.url === "string") {
+        entries.push({ key: data.keyword, value: data.url });
+      }
+    } catch {
+      console.warn(`Skipping malformed JSON: ${file}`);
+    }
   }
 
   return entries;

@@ -9,6 +9,15 @@ export interface Env {
   GITHUB_TOKEN?: string; // Optional: for higher rate limits on fallback
 }
 
+function isSafeRedirectUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function redirect302(url: string): Response {
   return new Response(null, {
     status: 302,
@@ -45,40 +54,50 @@ export default {
     const url = new URL(request.url);
     const host = request.headers.get("Host") ?? url.hostname;
 
-    // Extract subdomain from Host header
-    const keyword = extractSubdomain(host, env.MAIN_DOMAIN);
+    // Extract subdomain from Host header and normalize to lowercase
+    const rawKeyword = extractSubdomain(host, env.MAIN_DOMAIN);
 
     // No subdomain → bare domain handled by Vercel via DNS
-    if (!keyword) {
+    if (!rawKeyword) {
       return new Response("Not found", { status: 404 });
     }
 
-    // 1. Try KV lookup
-    try {
-      const targetUrl = await env.KEYWORDS.get(keyword);
-      if (targetUrl) {
-        return redirect302(targetUrl);
-      }
-    } catch {
-      // KV failed → try fallback
-      console.error("KV lookup failed for keyword:", keyword);
+    // Lowercase for consistent KV key matching (safe for Hangul — no-op)
+    const keyword = rawKeyword.toLowerCase();
 
+    // 1. Try KV lookup
+    let targetUrl: string | null = null;
+    try {
+      targetUrl = await env.KEYWORDS.get(keyword);
+    } catch {
+      console.error("KV lookup failed for keyword:", keyword);
+    }
+
+    // 2. Try GitHub Raw Content fallback if KV miss or KV error
+    if (!targetUrl) {
       try {
-        const fallbackUrl = await fetchFallback(
+        targetUrl = await fetchFallback(
           keyword,
           env.GITHUB_RAW_BASE,
           env.GITHUB_TOKEN
         );
-        if (fallbackUrl) {
-          return redirect302(fallbackUrl);
-        }
       } catch {
         console.error("Fallback also failed for keyword:", keyword);
-        return errorPage(env.WEB_APP_ORIGIN);
       }
     }
 
-    // Unknown keyword → redirect to web app keyword page
+    // 3. Redirect if we found a valid URL
+    if (targetUrl && isSafeRedirectUrl(targetUrl)) {
+      return redirect302(targetUrl);
+    }
+
+    // 4. Invalid URL in KV/fallback — show error page
+    if (targetUrl) {
+      console.error("Unsafe redirect URL for keyword:", keyword, targetUrl);
+      return errorPage(env.WEB_APP_ORIGIN);
+    }
+
+    // 5. Unknown keyword → redirect to web app keyword page
     return redirect302(
       `${env.WEB_APP_ORIGIN}/${encodeURIComponent(keyword)}`
     );

@@ -2,6 +2,7 @@ import { loadAllKeywords } from "@/lib/keywords";
 import { searchKeywords } from "@/lib/hangul";
 import Link from "next/link";
 import { join } from "path";
+import type { Metadata } from "next";
 
 function getDataDir() {
   return join(process.cwd(), "..", "data");
@@ -19,6 +20,15 @@ export async function generateStaticParams() {
 
 /** Allow dynamic params for unregistered keywords */
 export const dynamicParams = true;
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { keyword } = await params;
+  const decoded = safeDecodeURIComponent(keyword);
+  return {
+    title: `${decoded} - 가격.kr`,
+    description: `${decoded} 키워드의 가격.kr 리다이렉트 페이지. 커뮤니티 투표로 목적지가 결정됩니다.`,
+  };
+}
 
 function safeDecodeURIComponent(str: string): string {
   try {

@@ -1,3 +1,10 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "개인정보처리방침 - 가격.kr",
+  description: "가격.kr 서비스의 개인정보처리방침입니다.",
+};
+
 export default function PrivacyPage() {
   return (
     <main className="max-w-2xl mx-auto p-8">
