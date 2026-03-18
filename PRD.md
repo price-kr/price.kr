@@ -40,7 +40,7 @@
 
 ### 리다이렉트 엔진 (Cloudflare — 무료)
 * **DNS:** Cloudflare 와일드카드 DNS (`*.가격.kr` → Cloudflare 프록시로 라우팅)
-* **SSL/TLS:** Cloudflare Universal SSL — 와일드카드 인증서 (`*.가격.kr`) 무료 자동 발급. IDN(한글) 도메인은 퓨니코드(`xn--o39a88s.kr`)로 등록되며, 배포 전 인증서 발급이 정상 동작하는지 사전 검증 필요
+* **SSL/TLS:** Cloudflare Universal SSL — 와일드카드 인증서 (`*.가격.kr`) 무료 자동 발급. IDN(한글) 도메인은 퓨니코드(`xn--o39aom.kr`)로 등록되며, 배포 전 인증서 발급이 정상 동작하는지 사전 검증 필요
 * **라우팅 처리:** Cloudflare Workers — `Host` 헤더에서 서브도메인 추출 → 퓨니코드 디코딩 → Cloudflare KV 조회 → 최종 URL로 302 리다이렉트
 * **캐시 및 스토리지:** Cloudflare KV (무료: 일일 100K 읽기, 1K 쓰기, 1GB 저장)
 * **배포 도구:** Wrangler CLI (`wrangler deploy`)
@@ -61,7 +61,7 @@
 #### DNS 라우팅 (Cloudflare)
 * Cloudflare에 `*.가격.kr` 와일드카드 DNS를 설정하여 모든 서브도메인 요청을 Cloudflare 프록시로 라우팅합니다.
 * 한글 도메인(`가격.kr`)은 KISA를 통한 `.kr` 한글 도메인 등록이 필요합니다.
-* Cloudflare에는 퓨니코드(`xn--o39a88s.kr`)로 도메인을 등록합니다.
+* Cloudflare에는 퓨니코드(`xn--o39aom.kr`)로 도메인을 등록합니다.
 
 #### Cloudflare Workers 처리 (리다이렉트 전담)
 * Cloudflare Workers에서 요청의 `Host` 헤더를 파싱하여 서브도메인을 추출합니다.
