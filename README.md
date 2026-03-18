@@ -81,7 +81,7 @@ price.kr/
 - Node.js 20+
 - [Cloudflare 계정](https://dash.cloudflare.com/) (Workers + KV 무료 플랜)
 - [Vercel 계정](https://vercel.com/) (웹앱 배포용, 무료 플랜)
-- 도메인 (`가격.kr` / `xn--o39a88s.kr`) — Cloudflare DNS에 등록
+- 도메인 (`가격.kr` / `xn--o39aom.kr`) — Cloudflare DNS에 등록
 
 ### 2. 의존성 설치
 
@@ -118,7 +118,7 @@ preview_id = "<위에서 생성된 preview ID>"
 
 ```toml
 routes = [
-  { pattern = "*.xn--o39a88s.kr", zone_name = "xn--o39a88s.kr" }
+  { pattern = "*.xn--o39aom.kr", zone_name = "xn--o39aom.kr" }
 ]
 ```
 

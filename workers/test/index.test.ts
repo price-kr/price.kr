@@ -29,8 +29,8 @@ function createMockKV(data: Record<string, string>): KVNamespace {
 function createEnv(kvData: Record<string, string> = {}): Env {
   return {
     KEYWORDS: createMockKV(kvData),
-    MAIN_DOMAIN: "xn--o39a88s.kr",
-    WEB_APP_ORIGIN: "https://xn--o39a88s.kr",
+    MAIN_DOMAIN: "xn--o39aom.kr",
+    WEB_APP_ORIGIN: "https://xn--o39aom.kr",
     GITHUB_RAW_BASE: "https://raw.githubusercontent.com/laeyoung/price.kr/main",
   };
 }
@@ -49,8 +49,8 @@ describe("Worker redirect handler", () => {
     const env = createEnv({ "만두": targetUrl });
     // xn--hu1b07h = 만두 in punycode
     const req = createRequest(
-      "https://xn--hu1b07h.xn--o39a88s.kr/",
-      "xn--hu1b07h.xn--o39a88s.kr"
+      "https://xn--hu1b07h.xn--o39aom.kr/",
+      "xn--hu1b07h.xn--o39aom.kr"
     );
     const res = await worker.fetch(req, env);
     expect(res.status).toBe(302);
@@ -63,8 +63,8 @@ describe("Worker redirect handler", () => {
       "iphone": "https://search.shopping.naver.com/search?query=iphone",
     });
     const req = createRequest(
-      "https://iphone.xn--o39a88s.kr/",
-      "iphone.xn--o39a88s.kr"
+      "https://iphone.xn--o39aom.kr/",
+      "iphone.xn--o39aom.kr"
     );
     const res = await worker.fetch(req, env);
     expect(res.status).toBe(302);
@@ -76,21 +76,21 @@ describe("Worker redirect handler", () => {
   it("redirects unknown keyword to web app", async () => {
     const env = createEnv();
     const req = createRequest(
-      "https://unknownword.xn--o39a88s.kr/",
-      "unknownword.xn--o39a88s.kr"
+      "https://unknownword.xn--o39aom.kr/",
+      "unknownword.xn--o39aom.kr"
     );
     const res = await worker.fetch(req, env);
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe(
-      "https://xn--o39a88s.kr/unknownword"
+      "https://xn--o39aom.kr/unknownword"
     );
   });
 
   it("returns 404 for bare domain requests", async () => {
     const env = createEnv();
     const req = createRequest(
-      "https://xn--o39a88s.kr/",
-      "xn--o39a88s.kr"
+      "https://xn--o39aom.kr/",
+      "xn--o39aom.kr"
     );
     const res = await worker.fetch(req, env);
     expect(res.status).toBe(404);
@@ -106,13 +106,13 @@ describe("Worker redirect handler", () => {
     globalThis.fetch = vi.fn(async () => new Response("Not found", { status: 404 }));
     try {
       const req = createRequest(
-        "https://iphone.xn--o39a88s.kr/",
-        "iphone.xn--o39a88s.kr"
+        "https://iphone.xn--o39aom.kr/",
+        "iphone.xn--o39aom.kr"
       );
       const res = await worker.fetch(req, env);
       // KV failed, fallback returned null → redirect to web app
       expect(res.status).toBe(302);
-      expect(res.headers.get("Location")).toBe("https://xn--o39a88s.kr/iphone");
+      expect(res.headers.get("Location")).toBe("https://xn--o39aom.kr/iphone");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -125,8 +125,8 @@ describe("Worker redirect handler", () => {
     globalThis.fetch = vi.fn(async () => new Response(fallbackJson, { status: 200 }));
     try {
       const req = createRequest(
-        "https://iphone.xn--o39a88s.kr/",
-        "iphone.xn--o39a88s.kr"
+        "https://iphone.xn--o39aom.kr/",
+        "iphone.xn--o39aom.kr"
       );
       const res = await worker.fetch(req, env);
       expect(res.status).toBe(302);
@@ -139,8 +139,8 @@ describe("Worker redirect handler", () => {
   it("rejects unsafe redirect URLs from KV", async () => {
     const env = createEnv({ "iphone": "javascript:alert(1)" });
     const req = createRequest(
-      "https://iphone.xn--o39a88s.kr/",
-      "iphone.xn--o39a88s.kr"
+      "https://iphone.xn--o39aom.kr/",
+      "iphone.xn--o39aom.kr"
     );
     const res = await worker.fetch(req, env);
     expect(res.status).toBe(503);
@@ -151,8 +151,8 @@ describe("Worker redirect handler", () => {
   it("lowercases English subdomains for consistent KV lookup", async () => {
     const env = createEnv({ "iphone": "https://example.com/iphone" });
     const req = createRequest(
-      "https://iPhone.xn--o39a88s.kr/",
-      "iPhone.xn--o39a88s.kr"
+      "https://iPhone.xn--o39aom.kr/",
+      "iPhone.xn--o39aom.kr"
     );
     const res = await worker.fetch(req, env);
     expect(res.status).toBe(302);

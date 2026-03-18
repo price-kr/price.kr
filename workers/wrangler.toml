@@ -10,10 +10,10 @@ compatibility_date = "2025-12-01"
 # KV namespace binding
 [[kv_namespaces]]
 binding = "KEYWORDS"
-id = "placeholder-kv-id"
-preview_id = "placeholder-preview-kv-id"
+id = "74af1d44540348d99edb81f8bcb4276f"
+preview_id = "db8ad00cf73c4b7584dfa3c487fb2744"
 
 [vars]
-MAIN_DOMAIN = "xn--o39a88s.kr"
-WEB_APP_ORIGIN = "https://xn--o39a88s.kr"
+MAIN_DOMAIN = "xn--o39aom.kr"
+WEB_APP_ORIGIN = "https://xn--o39aom.kr"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/laeyoung/price.kr/main"
