@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-03-18 ~11:00 — Phase 1 코드 리뷰 3차 (최종) 및 수정
+
+**작업 내용:**
+3차 fresh-eyes 리뷰 에이전트 3개 배치. Critical 1건, Important 다수 발견 및 수정.
+
+**수정된 Critical 이슈:**
+
+### 1. validate-issue.yml: keyword-change 파싱 불일치
+- **문제:** 변경 요청 이슈 템플릿의 필드 라벨이 "변경할 키워드"인데, 파싱 regex는 "### 키워드"만 매칭 → 모든 keyword-change 이슈가 파싱 실패하여 자동 close됨.
+- **수정:** `body.match(/### (?:키워드|변경할 키워드)\s*\n\s*(.+)/)` — 두 라벨 모두 매칭.
+
+**수정된 Important 이슈:**
+
+### 2. Unicode dot separator 우회 (workers/src/subdomain.ts)
+- **문제:** `sub.includes(".")` 검사가 punycode decode 전에 실행되어 Unicode dot(U+3002 등)을 검출 불가.
+- **수정:** dot 검사를 `punycode.toUnicode()` 이후로 이동.
+
+### 3. cache.put 실패 시 fallback 전체 실패 (workers/src/fallback.ts)
+- **문제:** GitHub에서 URL을 성공적으로 가져왔지만 Cache API write가 실패하면 전체 fallback이 throw → 유효 URL을 버리고 웹앱으로 리다이렉트.
+- **수정:** `cache.put`을 try/catch로 감싸 — 캐시 실패는 비치명적 처리.
+
+### 4. SearchBar blurTimeout 메모리 릭 (web/components/SearchBar.tsx)
+- **문제:** 컴포넌트 unmount 시 setTimeout 미정리 → stale closure 실행 가능.
+- **수정:** `useEffect` cleanup에서 `clearTimeout` 호출.
+
+### 5. activeIndex 범위 검사 (web/components/SearchBar.tsx)
+- **수정:** Enter 키 핸들러에 `activeIndex < suggestions.length` 상한 검사 추가.
+
+### 6. getDataDir 중복 제거 (web)
+- **문제:** `page.tsx`와 `[keyword]/page.tsx`에서 각각 `join(process.cwd(), "..", "data")` 인라인 사용.
+- **수정:** `lib/keywords.ts`에 `getDataDir()` 함수로 통합, 양쪽 페이지에서 import.
+
+### 7. sync-kv.yml jq null 필터 누락
+- **문제:** full sync의 jq 파이프라인이 `keyword`/`url` null인 항목을 걸러내지 않음.
+- **수정:** `jq -s '[.[] | select(.keyword != null and .url != null) | ...]'` 추가.
+
+### 8. 기타
+- fallback.test.ts: "3M" → "3m"으로 변경 (실제 프로덕션에서는 항상 소문자 전달)
+- seed-data.test.ts: temp 디렉토리 cleanup 추가
+- .gitignore: `.DS_Store`, `.claude/`, `coverage/` 추가
+
+**테스트 결과:** 52 tests, 11 files, ALL PASS
+
+---
+
 ## 2026-03-18 ~09:30 — Phase 1 전체 코드 리뷰 및 수정
 
 **작업 내용:**

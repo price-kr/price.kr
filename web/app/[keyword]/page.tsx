@@ -1,12 +1,7 @@
-import { loadAllKeywords } from "@/lib/keywords";
+import { loadAllKeywords, getDataDir } from "@/lib/keywords";
 import { searchKeywords } from "@/lib/hangul";
 import Link from "next/link";
-import { join } from "path";
 import type { Metadata } from "next";
-
-function getDataDir() {
-  return join(process.cwd(), "..", "data");
-}
 
 interface Props {
   params: Promise<{ keyword: string }>;

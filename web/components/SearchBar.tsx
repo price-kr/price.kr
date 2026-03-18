@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { searchKeywords } from "@/lib/hangul";
 
 export function SearchBar({ keywords }: { keywords: string[] }) {
@@ -8,6 +8,12 @@ export function SearchBar({ keywords }: { keywords: string[] }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const blurTimeout = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeout.current) clearTimeout(blurTimeout.current);
+    };
+  }, []);
 
   const suggestions = useMemo(() => {
     if (!query.trim()) return [];
@@ -29,7 +35,7 @@ export function SearchBar({ keywords }: { keywords: string[] }) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-    } else if (e.key === "Enter" && activeIndex >= 0) {
+    } else if (e.key === "Enter" && activeIndex >= 0 && activeIndex < suggestions.length) {
       e.preventDefault();
       handleSelect(suggestions[activeIndex]);
     } else if (e.key === "Escape") {

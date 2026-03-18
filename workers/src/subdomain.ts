@@ -14,11 +14,13 @@ export function extractSubdomain(
 
   const sub = hostWithoutPort.slice(0, -suffix.length);
 
-  // Reject www and multi-level subdomains
-  if (sub === "www" || sub.includes(".")) return null;
-
   // Decode punycode using well-tested npm package
   // Note: toUnicode is lenient — returns original string if decoding fails
   // Invalid subdomains will simply miss in KV lookup → redirect to web app
-  return punycode.toUnicode(sub);
+  const decoded = punycode.toUnicode(sub);
+
+  // Reject www and multi-level subdomains (check after decode to catch Unicode dot separators)
+  if (decoded === "www" || decoded.includes(".")) return null;
+
+  return decoded;
 }

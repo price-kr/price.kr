@@ -1,10 +1,8 @@
-import { loadAllKeywords } from "@/lib/keywords";
+import { loadAllKeywords, getDataDir } from "@/lib/keywords";
 import { SearchBar } from "@/components/SearchBar";
-import { join } from "path";
 
 export default async function HomePage() {
-  const dataDir = join(process.cwd(), "..", "data");
-  const keywords = await loadAllKeywords(dataDir).catch(() => []);
+  const keywords = await loadAllKeywords(getDataDir()).catch(() => []);
   const keywordList = keywords.map((k) => k.keyword);
 
   return (

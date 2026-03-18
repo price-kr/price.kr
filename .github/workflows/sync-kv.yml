@@ -100,6 +100,6 @@ jobs:
         run: |
           # Build bulk JSON from all data files
           find data -name '*.json' ! -name 'blocklist.json' ! -name 'whitelist.json' ! -name 'profanity-blocklist.json' -exec cat {} + | \
-            jq -s '[.[] | {key: .keyword, value: .url}]' > /tmp/kv-bulk.json
+            jq -s '[.[] | select(.keyword != null and .url != null) | {key: .keyword, value: .url}]' > /tmp/kv-bulk.json
 
           wrangler kv bulk put --namespace-id="$CF_KV_NAMESPACE_ID" /tmp/kv-bulk.json

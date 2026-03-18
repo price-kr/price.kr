@@ -30,7 +30,7 @@ jobs:
             const body = context.payload.issue.body || '';
 
             // Parse form fields
-            const keywordMatch = body.match(/### 키워드\s*\n\s*(.+)/);
+            const keywordMatch = body.match(/### (?:키워드|변경할 키워드)\s*\n\s*(.+)/);
             const urlMatch = body.match(/### 목적지 URL\s*\n\s*(.+)/) || body.match(/### 새로운 URL\s*\n\s*(.+)/);
 
             if (!keywordMatch || !urlMatch) {

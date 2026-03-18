@@ -2,6 +2,10 @@ import "server-only";
 import { readdir, readFile } from "fs/promises";
 import { join } from "path";
 
+export function getDataDir(): string {
+  return join(process.cwd(), "..", "data");
+}
+
 export interface KeywordEntry {
   keyword: string;
   url: string;

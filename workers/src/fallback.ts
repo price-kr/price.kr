@@ -69,7 +69,11 @@ export async function fetchFallback(
   const responseToCache = new Response(text, {
     headers: { "Cache-Control": "public, max-age=300" },
   });
-  await cache.put(cacheKey, responseToCache);
+  try {
+    await cache.put(cacheKey, responseToCache);
+  } catch {
+    // Cache write failure is non-critical
+  }
 
   return parseKeywordJson(text);
 }

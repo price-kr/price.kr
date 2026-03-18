@@ -20,8 +20,9 @@ describe("buildFallbackUrl", () => {
   });
 
   it("builds correct URL for numeric keyword", () => {
-    const url = buildFallbackUrl("3M", base);
-    expect(url).toBe(`${base}/data/_num/3M.json`);
+    // In production, index.ts lowercases keywords before calling fallback
+    const url = buildFallbackUrl("3m", base);
+    expect(url).toBe(`${base}/data/_num/3m.json`);
   });
 });
 
