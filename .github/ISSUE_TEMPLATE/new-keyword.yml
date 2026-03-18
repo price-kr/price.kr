@@ -1,0 +1,28 @@
+name: "새 단어 제안하기"
+description: "새로운 키워드-URL 매핑을 제안합니다"
+title: "[키워드 제안] "
+labels: ["keyword-proposal"]
+body:
+  - type: input
+    id: keyword
+    attributes:
+      label: "키워드"
+      description: "등록하고 싶은 한글/영문 키워드 (예: 만두, iphone)"
+      placeholder: "만두"
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: "목적지 URL"
+      description: "이 키워드로 접속 시 이동할 URL"
+      placeholder: "https://search.shopping.naver.com/search/all?query=만두"
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: "제안 이유"
+      description: "이 키워드-URL 매핑이 유용한 이유를 설명해 주세요"
+    validations:
+      required: false

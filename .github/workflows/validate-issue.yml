@@ -1,0 +1,342 @@
+name: Validate Keyword Issue
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  validate:
+    if: contains(github.event.issue.labels.*.name, 'keyword-proposal') || contains(github.event.issue.labels.*.name, 'keyword-change')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Parse issue body
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+
+            // Parse form fields
+            const keywordMatch = body.match(/### (?:키워드|변경할 키워드)\s*\n\s*(.+)/);
+            const urlMatch = body.match(/### 목적지 URL\s*\n\s*(.+)/) || body.match(/### 새로운 URL\s*\n\s*(.+)/);
+
+            if (!keywordMatch || !urlMatch) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ 키워드 또는 URL을 파싱할 수 없습니다. 양식을 확인해 주세요.'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                state: 'closed'
+              });
+              return;
+            }
+
+            const keyword = keywordMatch[1].trim();
+            const url = urlMatch[1].trim();
+
+            core.setOutput('keyword', keyword);
+            core.setOutput('url', url);
+
+      - name: Validate keyword and URL
+        id: validate
+        if: steps.parse.outputs.keyword
+        uses: actions/github-script@v7
+        env:
+          KEYWORD: ${{ steps.parse.outputs.keyword }}
+          URL_INPUT: ${{ steps.parse.outputs.url }}
+          GOOGLE_SAFE_BROWSING_API_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_API_KEY }}
+        with:
+          script: |
+            const keyword = process.env.KEYWORD;
+            const url = process.env.URL_INPUT;
+            const fs = require('fs');
+
+            // Validate keyword contains only allowed characters (Korean, English, digits)
+            if (!/^[가-힣ㄱ-ㅎa-zA-Z0-9]+$/.test(keyword)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ 키워드에 허용되지 않는 문자가 포함되어 있습니다. 한글, 영문, 숫자만 사용 가능합니다.'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                state: 'closed'
+              });
+              return;
+            }
+
+            // Load blocklist
+            let blocklist = [];
+            try {
+              blocklist = JSON.parse(fs.readFileSync('data/blocklist.json', 'utf-8'));
+            } catch {}
+
+            // Check blocklist (full normalization including jamo bypass detection)
+            const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+            const JAMO_SET = new Set(CHOSEONG);
+            const normalize = (s) => s.normalize('NFC').replace(/[^가-힣ㄱ-ㅎa-zA-Z0-9]/g, '').toLowerCase();
+            const extractCho = (s) => [...s].map(ch => {
+              const code = ch.charCodeAt(0);
+              if (code >= 0xAC00 && code <= 0xD7A3) return CHOSEONG[Math.floor((code - 0xAC00) / 588)];
+              return ch;
+            }).join('');
+            const isJamoOnly = (s) => [...s].every(ch => JAMO_SET.has(ch));
+
+            const normalized = normalize(keyword);
+            let isBlocked = blocklist.some(b => normalize(b) === normalized);
+            // Jamo bypass check: "ㅋㅍ" should match "쿠팡"
+            if (!isBlocked && isJamoOnly(normalized)) {
+              isBlocked = blocklist.some(b => extractCho(normalize(b)) === normalized);
+            }
+
+            // Also check profanity blocklist
+            let profanityList = [];
+            try {
+              profanityList = JSON.parse(fs.readFileSync('data/profanity-blocklist.json', 'utf-8'));
+            } catch {}
+            if (!isBlocked) {
+              isBlocked = profanityList.some(b => normalize(b) === normalized);
+              if (!isBlocked && isJamoOnly(normalized)) {
+                isBlocked = profanityList.some(b => extractCho(normalize(b)) === normalized);
+              }
+            }
+
+            if (isBlocked) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ 이 키워드는 등록이 제한되어 있습니다 (금지 키워드 목록).'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                state: 'closed'
+              });
+              return;
+            }
+
+            // Validate URL format
+            try {
+              new URL(url);
+            } catch {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ 유효하지 않은 URL 형식입니다.'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                state: 'closed'
+              });
+              return;
+            }
+
+            // Whitelist check (loaded from data/whitelist.json for PR-based management)
+            let allowedDomains = [];
+            try {
+              allowedDomains = JSON.parse(fs.readFileSync('data/whitelist.json', 'utf-8'));
+            } catch {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ 내부 오류: 허용 도메인 목록을 로드할 수 없습니다. 관리자에게 문의해 주세요.'
+              });
+              core.setFailed('Failed to load whitelist.json');
+              return;
+            }
+
+            const urlObj = new URL(url);
+            const domainAllowed = allowedDomains.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d));
+
+            if (!domainAllowed) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `⚠️ URL 도메인(${urlObj.hostname})이 허용 목록에 없습니다. 관리자 검토가 필요합니다.`
+              });
+              // Don't close — let admin review
+              return;
+            }
+
+            // Google Safe Browsing API check
+            const safeBrowsingKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+            if (safeBrowsingKey) {
+              try {
+                const sbResponse = await fetch(
+                  `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${safeBrowsingKey}`,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      client: { clientId: 'price-kr', clientVersion: '1.0' },
+                      threatInfo: {
+                        threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE'],
+                        platformTypes: ['ANY_PLATFORM'],
+                        threatEntryTypes: ['URL'],
+                        threatEntries: [{ url }]
+                      }
+                    })
+                  }
+                );
+                const sbData = await sbResponse.json();
+                if (sbData.matches && sbData.matches.length > 0) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    body: '❌ URL이 Google Safe Browsing에서 위험한 것으로 감지되었습니다.'
+                  });
+                  await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    state: 'closed'
+                  });
+                  return;
+                }
+              } catch (err) {
+                console.warn('Safe Browsing check failed (non-blocking):', err.message);
+              }
+            }
+
+            core.setOutput('valid', 'true');
+
+      - name: Create PR
+        if: steps.validate.outputs.valid == 'true'
+        uses: actions/github-script@v7
+        env:
+          KEYWORD: ${{ steps.parse.outputs.keyword }}
+          URL_INPUT: ${{ steps.parse.outputs.url }}
+        with:
+          script: |
+            const keyword = process.env.KEYWORD;
+            const url = process.env.URL_INPUT;
+            const fs = require('fs');
+            const path = require('path');
+
+            // Compute file path
+            const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+            const first = keyword[0];
+            const code = first.charCodeAt(0);
+            let filePath;
+
+            if (code >= 0xAC00 && code <= 0xD7A3) {
+              const cho = CHOSEONG[Math.floor((code - 0xAC00) / 588)];
+              filePath = `data/${cho}/${first}/${keyword}.json`;
+            } else if (/\d/.test(first)) {
+              filePath = `data/_num/${keyword}.json`;
+            } else {
+              filePath = `data/_en/${keyword.toLowerCase()}.json`;
+            }
+
+            // Check if keyword already exists in repo (duplicate detection)
+            let existingFile;
+            try {
+              existingFile = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: filePath,
+                ref: 'main'
+              });
+            } catch {}
+
+            const isChangeRequest = context.payload.issue.labels?.some(l => l.name === 'keyword-change');
+
+            if (existingFile && !isChangeRequest) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `⚠️ 키워드 "${keyword}"는 이미 등록되어 있습니다. URL을 변경하려면 "키워드 변경 요청" 양식을 사용해 주세요.`
+              });
+              return;
+            }
+
+            if (!existingFile && isChangeRequest) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `⚠️ 키워드 "${keyword}"는 아직 등록되지 않았습니다. "새 단어 제안하기" 양식을 사용해 주세요.`
+              });
+              return;
+            }
+
+            // Normalize English keywords to lowercase to match filename
+            const normalizedKeyword = /^[a-zA-Z]/.test(keyword) ? keyword.toLowerCase() : keyword;
+            const content = JSON.stringify({ keyword: normalizedKeyword, url, created: new Date().toISOString().split('T')[0] }, null, 2) + '\n';
+            // Sanitize branch name: use issue number for safety
+            const branch = `keyword/issue-${context.issue.number}`;
+
+            // Create branch from main
+            const mainRef = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'heads/main'
+            });
+
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/heads/${branch}`,
+              sha: mainRef.data.object.sha
+            });
+
+            // Create or update file (pass sha for updates to avoid 409 conflict)
+            const fileParams = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: filePath,
+              message: isChangeRequest ? `feat: update keyword "${keyword}" URL` : `feat: add keyword "${keyword}"`,
+              content: Buffer.from(content).toString('base64'),
+              branch: branch
+            };
+            if (existingFile && existingFile.data?.sha) {
+              fileParams.sha = existingFile.data.sha;
+            }
+            await github.rest.repos.createOrUpdateFileContents(fileParams);
+
+            // Create PR
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: isChangeRequest ? `[키워드 변경] ${keyword}` : `[키워드 등록] ${keyword}`,
+              head: branch,
+              base: 'main',
+              body: `## 키워드 등록 제안\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** #${context.issue.number}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\n찬성이 3개 이상이면 자동 병합됩니다.`
+            });
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
+            });

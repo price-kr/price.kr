@@ -1,0 +1,106 @@
+name: Check Votes and Auto-Merge
+
+on:
+  # Run on PR reaction events (via schedule since no direct trigger)
+  schedule:
+    - cron: "0 */6 * * *" # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  check-votes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check and merge qualifying PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const VOTE_THRESHOLD = 3;
+
+            // Get all open PRs (with pagination)
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              sort: 'created',
+              direction: 'asc'
+            });
+
+            for (const pr of prs) {
+              // Only process keyword PRs
+              if (!pr.title.startsWith('[키워드 등록]') && !pr.title.startsWith('[키워드 변경]')) {
+                continue;
+              }
+
+              // Check for admin-approved label (Phase 1: admin direct approval mode)
+              const labels = pr.labels.map(l => l.name);
+              const isAdminApproved = labels.includes('admin-approved');
+
+              // Non-admin PRs must wait at least 24 hours
+              if (!isAdminApproved) {
+                const created = new Date(pr.created_at);
+                const now = new Date();
+                const hoursSinceCreation = (now - created) / (1000 * 60 * 60);
+                if (hoursSinceCreation < 24) continue;
+              }
+
+              // Get all reactions on PR (with pagination)
+              const reactions = await github.paginate(github.rest.reactions.listForIssue, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number
+              });
+
+              let thumbsUp = 0;
+              let thumbsDown = 0;
+
+              const prCreator = pr.user.login;
+              for (const reaction of reactions) {
+                // Exclude PR creator's own vote
+                if (reaction.user.login === prCreator) continue;
+                // TODO Phase 2: Check account age > 30 days
+                if (reaction.content === '+1') thumbsUp++;
+                if (reaction.content === '-1') thumbsDown++;
+              }
+
+              const isChange = pr.title.startsWith('[키워드 변경]');
+              const threshold = isChange ? Math.ceil(VOTE_THRESHOLD * 1.5) : VOTE_THRESHOLD;
+
+              if (isAdminApproved || (thumbsUp >= threshold && thumbsUp > thumbsDown)) {
+                // Auto-merge
+                try {
+                  await github.rest.pulls.merge({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    merge_method: 'squash',
+                    commit_title: pr.title,
+                    commit_message: isAdminApproved
+                      ? `관리자 승인 병합\n\nPR #${pr.number}`
+                      : `자동 병합: 찬성 ${thumbsUp} / 반대 ${thumbsDown}\n\nPR #${pr.number}`
+                  });
+
+                  console.log(`Merged PR #${pr.number}: ${pr.title}`);
+                } catch (err) {
+                  console.error(`Failed to merge PR #${pr.number}:`, err.message);
+                  // Notify on merge failure
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    body: `⚠️ 자동 병합에 실패했습니다: ${err.message}\n\n관리자 확인이 필요합니다.`
+                  });
+                  await github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    labels: ['merge-failed']
+                  });
+                }
+              }
+            }

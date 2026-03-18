@@ -4,6 +4,211 @@
 
 ---
 
+## 2026-03-18 ~11:00 — Phase 1 코드 리뷰 3차 (최종) 및 수정
+
+**작업 내용:**
+3차 fresh-eyes 리뷰 에이전트 3개 배치. Critical 1건, Important 다수 발견 및 수정.
+
+**수정된 Critical 이슈:**
+
+### 1. validate-issue.yml: keyword-change 파싱 불일치
+- **문제:** 변경 요청 이슈 템플릿의 필드 라벨이 "변경할 키워드"인데, 파싱 regex는 "### 키워드"만 매칭 → 모든 keyword-change 이슈가 파싱 실패하여 자동 close됨.
+- **수정:** `body.match(/### (?:키워드|변경할 키워드)\s*\n\s*(.+)/)` — 두 라벨 모두 매칭.
+
+**수정된 Important 이슈:**
+
+### 2. Unicode dot separator 우회 (workers/src/subdomain.ts)
+- **문제:** `sub.includes(".")` 검사가 punycode decode 전에 실행되어 Unicode dot(U+3002 등)을 검출 불가.
+- **수정:** dot 검사를 `punycode.toUnicode()` 이후로 이동.
+
+### 3. cache.put 실패 시 fallback 전체 실패 (workers/src/fallback.ts)
+- **문제:** GitHub에서 URL을 성공적으로 가져왔지만 Cache API write가 실패하면 전체 fallback이 throw → 유효 URL을 버리고 웹앱으로 리다이렉트.
+- **수정:** `cache.put`을 try/catch로 감싸 — 캐시 실패는 비치명적 처리.
+
+### 4. SearchBar blurTimeout 메모리 릭 (web/components/SearchBar.tsx)
+- **문제:** 컴포넌트 unmount 시 setTimeout 미정리 → stale closure 실행 가능.
+- **수정:** `useEffect` cleanup에서 `clearTimeout` 호출.
+
+### 5. activeIndex 범위 검사 (web/components/SearchBar.tsx)
+- **수정:** Enter 키 핸들러에 `activeIndex < suggestions.length` 상한 검사 추가.
+
+### 6. getDataDir 중복 제거 (web)
+- **문제:** `page.tsx`와 `[keyword]/page.tsx`에서 각각 `join(process.cwd(), "..", "data")` 인라인 사용.
+- **수정:** `lib/keywords.ts`에 `getDataDir()` 함수로 통합, 양쪽 페이지에서 import.
+
+### 7. sync-kv.yml jq null 필터 누락
+- **문제:** full sync의 jq 파이프라인이 `keyword`/`url` null인 항목을 걸러내지 않음.
+- **수정:** `jq -s '[.[] | select(.keyword != null and .url != null) | ...]'` 추가.
+
+### 8. 기타
+- fallback.test.ts: "3M" → "3m"으로 변경 (실제 프로덕션에서는 항상 소문자 전달)
+- seed-data.test.ts: temp 디렉토리 cleanup 추가
+- .gitignore: `.DS_Store`, `.claude/`, `coverage/` 추가
+
+**테스트 결과:** 52 tests, 11 files, ALL PASS
+
+---
+
+## 2026-03-18 ~09:30 — Phase 1 전체 코드 리뷰 및 수정
+
+**작업 내용:**
+5개 전문 리뷰 에이전트(Workers, Web, Scripts, Actions, Data/Config)를 병렬 배치하여 Phase 1 전체 코드를 상세 검토.
+Critical 5건, Important 10+건, Suggestion 10+건 발견. Critical과 주요 Important 이슈를 즉시 수정.
+
+**수정된 Critical 이슈:**
+
+### 1. Open Redirect 취약점 방지 (workers/src/index.ts)
+- **문제:** KV/fallback에서 가져온 URL에 대한 검증 없이 302 리다이렉트. `javascript:`, `data:` 등 위험한 스키마로 리다이렉트 가능.
+- **수정:** `isSafeRedirectUrl()` 함수 추가 — `http:`/`https:` 프로토콜만 허용. 위험한 URL은 503 에러 페이지 반환.
+
+### 2. Fallback 로직 오류 수정 (workers/src/index.ts)
+- **문제:** GitHub Raw Content fallback이 KV 예외(throw) 시에만 시도됨. KV가 `null` 반환(키 미존재) 시 fallback 미시도 → PRD 8.2 가용성 요구사항 미충족.
+- **수정:** KV miss(`null`)와 KV error 모두에서 fallback 시도하도록 제어 흐름 재구성.
+- **영향:** 기존 테스트 1개 업데이트 + 새 테스트 4개 추가 (fallback 성공, unsafe URL 거부, 소문자 정규화).
+
+### 3. 영문 키워드 소문자 정규화 (workers/src/index.ts)
+- **문제:** `extractSubdomain` 결과를 그대로 KV lookup에 사용. DNS가 대소문자 보존 시 `iPhone` ≠ `iphone` 불일치.
+- **수정:** KV lookup 전 `.toLowerCase()` 적용. 한글은 영향 없음(no-op).
+
+### 4. blocklist/whitelist JSON 파일 혼입 (web + scripts)
+- **문제:** `findJsonFiles()`가 `data/` 내 모든 `.json` 파일을 재귀 수집. `blocklist.json`, `whitelist.json`, `profanity-blocklist.json`은 배열 형태로 KeywordEntry 스키마와 불일치 → `undefined` 키워드 생성, KV에 garbage 데이터 write.
+- **수정:** `NON_KEYWORD_FILES` Set으로 제외 + JSON 파싱 시 `keyword`/`url` 필드 존재 여부 검증. malformed JSON은 skip.
+
+### 5. validate-issue.yml null body 가드 (GitHub Actions)
+- **문제:** `context.payload.issue.body`가 API로 빈 본문 Issue 생성 시 `null` → `.match()` 호출에서 TypeError.
+- **수정:** `const body = context.payload.issue.body || '';`
+
+**수정된 Important 이슈:**
+- `[keyword]/page.tsx`: `generateMetadata` 추가 (SEO — 키워드별 고유 title/description)
+- `privacy/page.tsx`: 메타데이터 export 추가
+- `SearchBar.tsx`: onBlur 핸들러, 키보드 내비게이션(ArrowUp/Down, Enter, Escape), ARIA combobox 패턴 적용, URL 구성 전 키워드 정규식 검증
+
+**테스트 결과:** 46 tests, 11 files, ALL PASS (Workers 19 + Web 7 + Scripts 20)
+
+**미수정 잔여 이슈 (Phase 2 고려):**
+- 코드 중복: choseong/path 로직이 5곳에 독립 구현 (shared 패키지 추출 고려)
+- `sync-kv.yml` full sync가 additive-only (stale KV entry 미삭제)
+- `keyword-delete` 이슈 라벨에 대한 워크플로우 미구현
+- `web/tsconfig.json`이 `tsconfig.base.json` 미확장
+- blocklist 확대 필요 (현재 8개 브랜드명)
+- `_num/` 디렉토리 샘플 데이터 미존재
+
+---
+
+## 2026-03-17 ~16:00 — Tasks 9-16: GitHub Actions, Seed Data, Docs 일괄 완료
+
+**작업 내용:**
+- Task 9: `validate-issue.yml` — Issue 파싱 → 키워드/URL 유효성 검증 (blocklist+jamo, whitelist, Safe Browsing) → 자동 PR 생성
+- Task 10: `sync-kv.yml` — main push 시 incremental/full KV 동기화 + 삭제 처리
+- Task 11: `auto-merge.yml` — 6시간마다 투표 확인, admin-approved 즉시 병합, PR 생성자 투표 제외
+- Task 12: Task 4에서 이미 완료 (layout.tsx Korean OG meta + next.config.ts)
+- Task 13: `seed-data.ts` — TSV 입력으로 키워드 JSON 파일 일괄 생성 + 3개 테스트
+- Task 14: 전체 스모크 테스트 — **43 tests, 11 files, ALL PASS**
+- Task 15: `delete-keyword.yml` 삭제 요청 템플릿 + `.github/CODEOWNERS`
+- Task 16: `CONTRIBUTING.md` (sparse checkout 가이드 포함) + `README.md` 업데이트
+
+**기술적 결정:** 없음 — 플랜대로 실행. GitHub Actions workflow는 YAML 파일이므로 유닛 테스트 불가, 실제 리포 배포 후 검증 필요.
+
+---
+
+## 2026-03-17 ~15:55 — Tasks 5-8: 데이터/설정 태스크 일괄 완료
+
+**작업 내용:**
+- Task 5: 샘플 키워드 데이터 (만두, 가방, iphone) JSON 파일 생성
+- Task 6: `sync-kv.ts` — JSON → Cloudflare KV 동기화 스크립트 + `buildKvEntries` 테스트
+- Task 7: GitHub Issue 템플릿 3종 (새 단어 제안, 변경 요청, 삭제 요청)
+- Task 8: `blocklist.json` (상표명 8개), `whitelist.json` (11개 도메인), `profanity-blocklist.json` (비속어 8개)
+
+**기술적 결정:** 없음 (플랜대로 실행). 데이터/설정 파일이므로 별도 에이전트 리뷰 생략.
+
+---
+
+## 2026-03-17 ~15:50 — Task 4: Next.js Web App 완료
+
+**작업 내용:**
+- `web/` 워크스페이스 수동 생성 (create-next-app 대신 — interactive prompt 회피)
+- Next.js 15 App Router: layout.tsx (Korean OG meta), page.tsx (검색 UI), [keyword]/page.tsx, privacy/page.tsx
+- SearchBar 클라이언트 컴포넌트 (자동완성, 초성 검색)
+- lib/hangul.ts (웹용 초성 추출/검색), lib/keywords.ts (JSON 데이터 로더, server-only)
+- vitest.config.ts + jsdom 환경, @testing-library/react
+- 7개 테스트 전부 통과
+
+**기술적 결정:**
+
+### 1. create-next-app 대신 수동 프로젝트 구성
+- **결정:** `create-next-app`의 interactive prompt(React Compiler 질문)를 피하기 위해 수동으로 package.json, tsconfig.json 등 생성
+- **이유:** CI/sandbox 환경에서 interactive prompt가 hang됨
+
+### 2. `outputFileTracingIncludes`로 data/ 디렉토리 명시적 포함
+- **결정:** `next.config.ts`에 `outputFileTracingIncludes: { "/*": ["../data/**/*"] }` 추가
+- **이유:** `outputFileTracingRoot`만으로는 `data/` 파일이 Vercel serverless 번들에 포함되지 않음. Vercel에서 `process.cwd()`는 `/var/task`를 반환하므로 `../data`가 존재해야 함
+- **검토:** data/를 web/ 안에 이동하는 것도 고려했으나, workers/와 scripts/에서도 참조하므로 monorepo 루트에 유지
+
+### 3. `getDataDir()` 함수화
+- **결정:** `[keyword]/page.tsx`에서 `dataDir`를 모듈 스코프 상수에서 함수 호출로 변경
+- **이유:** 모듈 스코프의 `process.cwd()` 호출은 import 시점에 평가되어 빌드/edge 환경에서 예상과 다를 수 있음
+
+---
+
+## 2026-03-17 ~15:45 — Task 3: Cloudflare Workers Redirect Engine 완료
+
+**작업 내용:**
+- `workers/` 워크스페이스 설정 (package.json, wrangler.toml, tsconfig.json)
+- `subdomain.ts`: Host 헤더에서 서브도메인 추출 + punycode 디코딩
+- `fallback.ts`: KV 장애 시 GitHub Raw Content 폴백 (Cache API 활용)
+- `index.ts`: 메인 핸들러 — KV 조회 → 302 리다이렉트, 실패 시 폴백, 에러 페이지
+- 16개 테스트 전부 통과 (unit test 방식, mock KV)
+
+**기술적 결정:**
+
+### 1. `punycode` import 경로: trailing slash 제거
+- **결정:** `import punycode from "punycode"` (slash 없이)
+- **이유:** Cloudflare Workers는 Node.js 런타임이 아님. trailing slash(`punycode/`)는 Node.js에서 npm 패키지를 명시적으로 로드하는 트릭이지만, Wrangler의 esbuild 번들러는 `punycode`만으로도 npm 패키지를 올바르게 resolve
+- **검토:** `node_compat = true` 없이도 esbuild가 npm 의존성을 번들에 포함시킴
+
+### 2. 테스트 환경: `@cloudflare/vitest-pool-workers` 대신 일반 vitest
+- **결정:** Workers 전용 vitest pool 대신 표준 vitest + mock KV 사용
+- **이유:** 현 환경(Linux arm64)에서 vitest-pool-workers 실행 시 segfault 발생. esbuild postinstall도 일부 실패
+- **영향:** `caches.default`, KVNamespace 등 CF Workers API는 수동 mock. 프로덕션 동작 검증은 `wrangler dev`로 별도 수행 필요
+
+### 3. Korean URL in Location 헤더: Node.js ByteString 제약
+- **결정:** 테스트에서 KV 값에 URL-encoded 쿼리 파라미터 사용
+- **이유:** Node.js의 `Response` 구현은 HTTP 헤더에 non-ASCII 문자(ByteString 범위 초과) 허용 안 함. CF Workers 런타임은 허용하므로 프로덕션에서는 문제없음
+- **검토:** 실제 KV 데이터에는 URL-encoded 값을 저장하면 양쪽 모두 호환
+
+### 4. Fallback URL 경로 인코딩
+- **결정:** `buildFallbackUrl`에서 경로 세그먼트별 `encodeURIComponent` 적용
+- **이유:** 한글 디렉토리명(`ㅁ/만/만두.json`)이 raw URL로 전달되면 `fetch()` 동작이 런타임에 따라 다를 수 있음
+
+---
+
+## 2026-03-17 ~15:30 — Task 2: Hangul Utilities 완료
+
+**작업 내용:**
+- `scripts/` 워크스페이스 설정 (package.json, tsconfig.json, vitest.config.ts)
+- `hangul-path.ts`: 초성 추출(`getChoseong`) + 키워드→파일 경로 계산(`getKeywordPath`)
+- `validate-keyword.ts`: NFC 정규화, 금지어 검사, 자모(ㅋㅍ) 우회 탐지
+- 16개 테스트 전부 통과
+
+**기술적 결정:**
+
+### 1. vitest 3.x → 2.x 다운그레이드
+- **결정:** vitest `^2.1.8` 사용 (플랜은 `^3.0.0` 명시)
+- **이유:** vitest 3.x가 현 환경(Linux arm64)에서 Segmentation fault 발생. 2.x는 정상 동작
+- **영향:** Workers 워크스페이스도 `@cloudflare/vitest-pool-workers`와 vitest 2.x 사용 예정이므로 버전 일관성 확보
+
+### 2. 빈 문자열 방어 추가
+- **결정:** `getKeywordPath("")` 호출 시 `throw Error` (플랜에는 없었음)
+- **이유:** 리뷰에서 발견 — `keyword[0]`이 `undefined`가 되어 `charCodeAt` 호출 시 TypeError 발생
+- **검토:** 빈 문자열은 상위 레이어(Workers의 `extractSubdomain`, Actions의 regex)에서 걸러지지만, 방어적 프로그래밍으로 추가
+
+### 3. 자모(ㅋㅍ) 키워드의 파일 경로 라우팅
+- **결정:** 호환성 자모(U+3131-U+314E)로 시작하는 키워드는 `_en` 디렉토리로 라우팅
+- **이유:** `getChoseong`은 조합형 음절(U+AC00-U+D7A3)만 인식. 독립 자모는 조합형 범위 밖이므로 한글로 분류 불가
+- **검토 대안:** 자모 전용 디렉토리(`_jamo/`) 추가 고려 → 실사용 시나리오가 거의 없으므로 과잉 설계로 판단
+
+---
+
 ## 2026-03-17 ~14:40 — Task 1: Project Scaffolding 완료
 
 **작업 내용:**

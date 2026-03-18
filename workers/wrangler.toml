@@ -1,0 +1,19 @@
+name = "price-kr-redirect"
+main = "src/index.ts"
+compatibility_date = "2025-12-01"
+
+# Route: all *.xn--o39a88s.kr requests
+# routes = [
+#   { pattern = "*.xn--o39a88s.kr", zone_name = "xn--o39a88s.kr" }
+# ]
+
+# KV namespace binding
+[[kv_namespaces]]
+binding = "KEYWORDS"
+id = "placeholder-kv-id"
+preview_id = "placeholder-preview-kv-id"
+
+[vars]
+MAIN_DOMAIN = "xn--o39a88s.kr"
+WEB_APP_ORIGIN = "https://xn--o39a88s.kr"
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/laeyoung/price.kr/main"
