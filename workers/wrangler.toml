@@ -2,10 +2,10 @@ name = "price-kr-redirect"
 main = "src/index.ts"
 compatibility_date = "2025-12-01"
 
-# Route: all *.xn--o39a88s.kr requests
-# routes = [
-#   { pattern = "*.xn--o39a88s.kr", zone_name = "xn--o39a88s.kr" }
-# ]
+# Route: all *.xn--o39aom.kr requests
+routes = [
+	{ pattern = "*.xn--o39aom.kr/*", zone_name = "xn--o39aom.kr" }
+]
 
 # KV namespace binding
 [[kv_namespaces]]
