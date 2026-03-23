@@ -18,7 +18,7 @@
 ### 설치
 ```bash
 # 저장소 클론 (sparse checkout 권장 — 파일이 많을 수 있습니다)
-git clone --filter=blob:none --sparse https://github.com/laeyoung/price.kr.git
+git clone --filter=blob:none --sparse https://github.com/price-kr/price.kr.git
 cd price.kr
 git sparse-checkout set workers web scripts .github
 

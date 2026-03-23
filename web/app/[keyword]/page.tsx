@@ -44,7 +44,7 @@ export default async function KeywordPage({ params }: Props) {
     .filter((k) => k !== decoded)
     .slice(0, 5);
 
-  const issueUrl = `https://github.com/laeyoung/price.kr/issues/new?template=new-keyword.yml&title=${encodeURIComponent(`[키워드 제안] ${decoded}`)}`;
+  const issueUrl = `https://github.com/price-kr/price.kr/issues/new?template=new-keyword.yml&title=${encodeURIComponent(`[키워드 제안] ${decoded}`)}`;
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
