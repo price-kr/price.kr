@@ -58,6 +58,11 @@ if (isMainModule) {
     process.exit(1);
   }
 
+  if (!/^[a-f0-9]+$/.test(namespaceId)) {
+    console.error("CF_KV_NAMESPACE_ID must be a hex string");
+    process.exit(1);
+  }
+
   const entries = await buildKvEntries(dataDir);
   console.log(`Found ${entries.length} keywords to sync`);
 
@@ -67,9 +72,10 @@ if (isMainModule) {
   const { writeFileSync } = await import("fs");
   writeFileSync(tmpFile, JSON.stringify(bulkData));
 
-  const { execSync } = await import("child_process");
-  execSync(
-    `npx wrangler kv bulk put --namespace-id=${namespaceId} ${tmpFile}`,
+  const { execFileSync } = await import("child_process");
+  execFileSync(
+    "npx",
+    ["wrangler", "kv", "bulk", "put", `--namespace-id=${namespaceId}`, tmpFile],
     { stdio: "inherit" }
   );
   console.log("KV sync complete");
