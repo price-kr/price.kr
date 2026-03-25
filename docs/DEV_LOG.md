@@ -4,6 +4,35 @@
 
 ---
 
+## 2026-03-26 ~08:30 — Top 100 Korean Keywords Seeding
+
+**작업 내용:**
+한국인이 많이 검색하는 키워드 100개를 사전 등록하여 서비스 초기 콘텐츠를 확보했다.
+
+**수행 단계:**
+1. `data/whitelist.json`에 `weather.naver.com`, `map.naver.com` 도메인 추가
+2. 웹 검색으로 2025-2026 한국 검색 트렌드 조사 (Google Year in Search, 네이버 쇼핑 트렌드)
+3. 97개 신규 키워드 선정 (기존 만두/가방/iphone 제외)
+4. `scripts/generate-top100-tsv.ts` 생성 — 카테고리별 URL 매핑 + blocklist 검증
+5. `seed-data.ts`로 97개 JSON 파일 생성
+6. 전체 52개 테스트 통과 확인
+
+**키워드 선정 기준:**
+- 카테고리: 쇼핑 57개, 정보성 25개, 지역 10개, 기타 5개
+- 쇼핑 키워드는 네이버 쇼핑 검색으로 연결, 지역은 나무위키, 날씨는 weather.naver.com 등 적합한 서비스로 매핑
+- blocklist(브랜드 8개) + profanity-blocklist(비속어 8개) 검증 통과
+
+**기술적 결정:**
+- **Validate-first, output-later 패턴**: 모든 키워드 검증을 완료한 뒤 TSV 출력 → partial TSV 방지
+- **모든 URL에 `encodeURIComponent` 적용**: namu.wiki path 포함 (HTTP Location 헤더는 ASCII만 허용, RFC 7230)
+- **맛집 이중 적용 방지**: keyword === "맛집"이면 접미사 생략
+- **기존 키워드 보호**: `EXISTING_KEYWORDS` Set으로 기존 3개 키워드를 TSV에서 제외 → created 날짜 보존
+
+**KV 동기화:**
+`workflow_dispatch`로 `sync-kv.yml` full-sync 수동 트리거 권장 (incremental은 ~97회 개별 write로 15-25분 CI 소요).
+
+---
+
 ## 2026-03-18 ~11:00 — Phase 1 코드 리뷰 3차 (최종) 및 수정
 
 **작업 내용:**
