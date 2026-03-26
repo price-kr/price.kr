@@ -148,8 +148,8 @@ const KEYWORD_URLS: Record<string, string> = {
   "책상": ohou("책상"),
 
   // Pets → Pet Friends (반려동물 쇼핑)
-  "강아지사료": "https://m.pet-friends.co.kr/",
-  "고양이간식": "https://m.pet-friends.co.kr/",
+  "강아지사료": `https://m.pet-friends.co.kr/search?query=${enc("강아지사료")}`,
+  "고양이간식": `https://m.pet-friends.co.kr/search?query=${enc("고양이간식")}`,
 
   // ══════════════════════════════════════════════════════════════
   // Tier 3: Fallback — best available destination
