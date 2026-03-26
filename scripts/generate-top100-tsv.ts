@@ -37,7 +37,7 @@ const keywords: Array<{ keyword: string; category: string }> = [
 
   // ── Shopping: Electronics (9) ──
   { keyword: "노트북", category: "shopping" },
-  { keyword: "에어팟", category: "shopping" },
+  { keyword: "무선이어폰", category: "shopping" },
   { keyword: "스마트폰", category: "shopping" },
   { keyword: "태블릿", category: "shopping" },
   { keyword: "모니터", category: "shopping" },
@@ -138,7 +138,7 @@ const keywords: Array<{ keyword: string; category: string }> = [
   { keyword: "광주", category: "place" },
   { keyword: "수원", category: "place" },
   { keyword: "강남", category: "place" },
-  { keyword: "이태원", category: "place" },
+  { keyword: "이태원", category: "transport" },  // map search — namu.wiki article dominated by 2022 disaster
 
   // ── Other (5) ──
   { keyword: "날씨", category: "weather" },
