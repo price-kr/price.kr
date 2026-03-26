@@ -80,7 +80,7 @@ const KEYWORD_URLS: Record<string, string> = {
   "골프": "https://www.teescanner.com/",
 
   // Travel prices — 여행 가격비교
-  "항공권": "https://www.skyscanner.co.kr/",
+  "항공권": "https://flightdeal.kr/",
   "호텔": "https://www.goodchoice.kr/",
   "캠핑": "https://www.gocamping.or.kr/",
 
@@ -185,7 +185,7 @@ const KEYWORD_URLS: Record<string, string> = {
   "뉴스": `https://search.naver.com/search.naver?where=news&query=${enc("뉴스")}`,
   "다이어트": naverShopping("다이어트"),
   "농구": `https://search.naver.com/search.naver?query=${enc("농구")}`,
-  "여행": `https://search.naver.com/search.naver?query=${enc("여행")}`,
+  "여행": "https://flightdeal.kr/",
 };
 
 // ── Phase 1: Validate all keywords (before any output) ─────────
