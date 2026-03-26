@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-03-26 ~23:30 — Witty URL Mapping: "가격" 테마 URL 전면 교체
+
+**작업 내용:**
+97개 키워드의 target URL을 "○○.가격.kr = ○○의 가격을 가장 잘 보여주는 곳" 테마에 맞게 전면 교체.
+
+**3-tier 전략:**
+- **Tier 1 (위트 ~30개):** "가격"을 재미있게 재해석 — 공무원→봉급표(mpm.go.kr), 영화→CGV, 야구→스탯티즈 연봉, 커피→스타벅스 메뉴, 부동산→호갱노노
+- **Tier 2 (가격비교 ~44개):** 전문 가격비교 사이트 — 가전→다나와, 패션→무신사, 뷰티→화해, 가구→오늘의집, 반려동물→펫프렌즈
+- **Tier 3 (유지 ~23개):** 식품→네이버 쇼핑(대안 없음), 지역→네이버 부동산("동네의 가격=집값" 재해석)
+
+**기술적 결정:**
+- `generate-top100-tsv.ts` 전면 리팩터링: 카테고리 기반 switch문 → `KEYWORD_URLS: Record<string, string>` 키워드별 직접 매핑
+- 헬퍼 함수로 사이트별 URL 패턴 추상화: `danawa()`, `musinsa()`, `hwahae()`, `ohou()`, `naverLand()`, `naverShopping()`
+- `data/whitelist.json`에 32개 신규 도메인 추가 (13→45개)
+- validate-first/output-later 패턴 및 blocklist 검증 로직 유지
+
+**웹 조사 결과 (미확정 키워드):**
+- 축구 → K리그 공식(kleague.com), 골프 → 티스캐너(teescanner.com), 헬스 → 다짐(da-gym.co.kr)
+- 날씨/뉴스/다이어트/농구/여행: 적절한 "가격" 해석 없어 현행 유지
+
+---
+
 ## 2026-03-26 ~08:30 — Top 100 Korean Keywords Seeding
 
 **작업 내용:**
