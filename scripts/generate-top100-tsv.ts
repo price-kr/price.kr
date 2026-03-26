@@ -112,7 +112,7 @@ const keywords: Array<{ keyword: string; category: string }> = [
   { keyword: "호텔", category: "info" },
   { keyword: "항공권", category: "info" },
   { keyword: "여행", category: "info" },
-  { keyword: "캠핑", category: "shopping" },
+  { keyword: "캠핑", category: "info" },
 
   // ── Information: Health (3) ──
   { keyword: "다이어트", category: "info" },
