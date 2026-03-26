@@ -109,7 +109,7 @@ const keywords: Array<{ keyword: string; category: string }> = [
   { keyword: "음악", category: "entertainment" },
 
   // ── Information: Travel (4) ──
-  { keyword: "호텔", category: "shopping" },
+  { keyword: "호텔", category: "info" },
   { keyword: "항공권", category: "info" },
   { keyword: "여행", category: "info" },
   { keyword: "캠핑", category: "shopping" },
@@ -117,7 +117,7 @@ const keywords: Array<{ keyword: string; category: string }> = [
   // ── Information: Health (3) ──
   { keyword: "다이어트", category: "info" },
   { keyword: "헬스", category: "info" },
-  { keyword: "병원", category: "transport" },
+  { keyword: "병원", category: "transport" },  // map search for nearby hospitals
 
   // ── Information: Education (3) ──
   { keyword: "영어", category: "info" },
@@ -126,7 +126,7 @@ const keywords: Array<{ keyword: string; category: string }> = [
 
   // ── Information: Transportation (2) ──
   { keyword: "지하철", category: "transport" },
-  { keyword: "택시", category: "info" },
+  { keyword: "택시", category: "transport" },
 
   // ── Region / City (10) ──
   { keyword: "서울", category: "place" },
