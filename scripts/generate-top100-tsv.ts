@@ -58,15 +58,15 @@ const KEYWORD_URLS: Record<string, string> = {
   "전세": "https://kbland.kr/",
 
   // Public service prices — 공공 요금/봉급
-  "공무원": "https://www.mpm.go.kr/mpm/info/resultPay/bizSalary/2026/",
-  "택배": "https://parcel.epost.go.kr/",
+  "공무원": "https://www.mpm.go.kr/mpm/info/resultPay/bizSalary/",
+  "택배": "https://service.epost.go.kr/iservice/usr/charge/EpoPstDmstcChargeList.jsp",
   "택시": "https://kakaomobility.com/",
-  "지하철": "https://smrt.co.kr/",
+  "지하철": "https://map.naver.com/p/subway",
   "병원": "https://www.hira.or.kr/",
 
   // Entertainment prices — 구독료/티켓값
   "영화": "https://www.cgv.co.kr/",
-  "음악": "https://www.melon.com/",
+  "음악": "https://www.melon.com/ticket/index.htm",
   "드라마": "https://www.netflix.com/kr/",
   "웹툰": "https://comic.naver.com/",
 
@@ -117,9 +117,9 @@ const KEYWORD_URLS: Record<string, string> = {
   "텀블러": danawa("텀블러"),
   "유모차": danawa("유모차"),
   "분유": danawa("분유"),
-  "등산화": danawa("등산화"),
-  "요가매트": danawa("요가매트"),
-  "자전거": danawa("자전거"),
+  "등산화": musinsa("등산화"),
+  "요가매트": naverShopping("요가매트"),
+  "자전거": naverShopping("자전거"),
 
   // Fashion → Musinsa (패션 가격비교)
   "운동화": musinsa("운동화"),
@@ -148,8 +148,8 @@ const KEYWORD_URLS: Record<string, string> = {
   "책상": ohou("책상"),
 
   // Pets → Pet Friends (반려동물 쇼핑)
-  "강아지사료": `https://m.pet-friends.co.kr/search?query=${enc("강아지사료")}`,
-  "고양이간식": `https://m.pet-friends.co.kr/search?query=${enc("고양이간식")}`,
+  "강아지사료": `https://www.pet-friends.co.kr/search?query=${enc("강아지사료")}`,
+  "고양이간식": `https://www.pet-friends.co.kr/search?query=${enc("고양이간식")}`,
 
   // ══════════════════════════════════════════════════════════════
   // Tier 3: Fallback — best available destination
