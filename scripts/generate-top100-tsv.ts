@@ -15,174 +15,184 @@ const allBlocked = [...blocklist, ...profanity];
 // ── Existing keywords (skip to avoid overwriting created date) ─
 const EXISTING_KEYWORDS = new Set(["만두", "가방", "iphone"]);
 
-// ── Keyword list with categories ───────────────────────────────
-// Selected from 2025-2026 Korean search trends research.
-// Categories: shopping, weather, place, wiki, news, food_map,
-//             finance, sports, entertainment, realestate, info, transport
-const keywords: Array<{ keyword: string; category: string }> = [
-  // ── Shopping: Food / Groceries (13) ──
-  { keyword: "라면", category: "shopping" },
-  { keyword: "김치", category: "shopping" },
-  { keyword: "커피", category: "shopping" },
-  { keyword: "떡볶이", category: "shopping" },
-  { keyword: "치킨", category: "shopping" },
-  { keyword: "과자", category: "shopping" },
-  { keyword: "소금빵", category: "shopping" },
-  { keyword: "우유", category: "shopping" },
-  { keyword: "생수", category: "shopping" },
-  { keyword: "삼겹살", category: "shopping" },
-  { keyword: "떡", category: "shopping" },
-  { keyword: "홍삼", category: "shopping" },
-  { keyword: "꿀", category: "shopping" },
+// ── URL helper functions ───────────────────────────────────────
+const enc = (kw: string) => encodeURIComponent(kw);
 
-  // ── Shopping: Electronics (9) ──
-  { keyword: "노트북", category: "shopping" },
-  { keyword: "무선이어폰", category: "shopping" },
-  { keyword: "스마트폰", category: "shopping" },
-  { keyword: "태블릿", category: "shopping" },
-  { keyword: "모니터", category: "shopping" },
-  { keyword: "키보드", category: "shopping" },
-  { keyword: "마우스", category: "shopping" },
-  { keyword: "이어폰", category: "shopping" },
-  { keyword: "충전기", category: "shopping" },
+const naverShopping = (kw: string) =>
+  `https://search.shopping.naver.com/search/all?query=${enc(kw)}`;
 
-  // ── Shopping: Fashion (10) ──
-  { keyword: "원피스", category: "shopping" },
-  { keyword: "코트", category: "shopping" },
-  { keyword: "운동화", category: "shopping" },
-  { keyword: "청바지", category: "shopping" },
-  { keyword: "후드티", category: "shopping" },
-  { keyword: "가디건", category: "shopping" },
-  { keyword: "티셔츠", category: "shopping" },
-  { keyword: "슬리퍼", category: "shopping" },
-  { keyword: "백팩", category: "shopping" },
-  { keyword: "선글라스", category: "shopping" },
+const danawa = (kw: string) =>
+  `https://search.danawa.com/dsearch.php?query=${enc(kw)}`;
 
-  // ── Shopping: Beauty (8) ──
-  { keyword: "선크림", category: "shopping" },
-  { keyword: "립스틱", category: "shopping" },
-  { keyword: "마스크팩", category: "shopping" },
-  { keyword: "쿠션", category: "shopping" },
-  { keyword: "향수", category: "shopping" },
-  { keyword: "샴푸", category: "shopping" },
-  { keyword: "치약", category: "shopping" },
-  { keyword: "세럼", category: "shopping" },
+const musinsa = (kw: string) =>
+  `https://www.musinsa.com/search/goods?keyword=${enc(kw)}`;
 
-  // ── Shopping: Home / Appliances (10) ──
-  { keyword: "에어컨", category: "shopping" },
-  { keyword: "냉장고", category: "shopping" },
-  { keyword: "세탁기", category: "shopping" },
-  { keyword: "공기청정기", category: "shopping" },
-  { keyword: "정수기", category: "shopping" },
-  { keyword: "텀블러", category: "shopping" },
-  { keyword: "에어프라이어", category: "shopping" },
-  { keyword: "전기밥솥", category: "shopping" },
-  { keyword: "침대", category: "shopping" },
-  { keyword: "책상", category: "shopping" },
+const hwahae = (kw: string) =>
+  `https://www.hwahae.co.kr/search?query=${enc(kw)}`;
 
-  // ── Shopping: Baby / Pet / Sports gear (7) ──
-  { keyword: "유모차", category: "shopping" },
-  { keyword: "분유", category: "shopping" },
-  { keyword: "강아지사료", category: "shopping" },
-  { keyword: "고양이간식", category: "shopping" },
-  { keyword: "요가매트", category: "shopping" },
-  { keyword: "등산화", category: "shopping" },
-  { keyword: "자전거", category: "shopping" },
+const ohou = (kw: string) =>
+  `https://ohou.se/search?query=${enc(kw)}`;
 
-  // ── Information: Finance (5) ──
-  { keyword: "주식", category: "finance" },
-  { keyword: "환율", category: "finance" },
-  { keyword: "비트코인", category: "finance" },
-  { keyword: "부동산", category: "realestate" },
-  { keyword: "전세", category: "realestate" },
+const naverLand = (kw: string) =>
+  `https://land.naver.com/search/result.naver?query=${enc(kw)}`;
 
-  // ── Information: Sports (4) ──
-  { keyword: "야구", category: "sports" },
-  { keyword: "축구", category: "sports" },
-  { keyword: "농구", category: "sports" },
-  { keyword: "골프", category: "sports" },
+// ── Keyword → URL mapping ──────────────────────────────────────
+// "○○.가격.kr = ○○의 가격을 가장 잘 보여주는 곳"
+//
+// Tier 1: Witty — creative "가격" reinterpretation
+// Tier 2: Price comparison — specialized comparison sites
+// Tier 3: Fallback — Naver Shopping (food), Naver Land (regions)
 
-  // ── Information: Entertainment (4) ──
-  { keyword: "영화", category: "entertainment" },
-  { keyword: "드라마", category: "entertainment" },
-  { keyword: "웹툰", category: "entertainment" },
-  { keyword: "음악", category: "entertainment" },
+const KEYWORD_URLS: Record<string, string> = {
+  // ══════════════════════════════════════════════════════════════
+  // Tier 1: Witty "가격" reinterpretation (~30)
+  // ══════════════════════════════════════════════════════════════
 
-  // ── Information: Travel (4) ──
-  { keyword: "호텔", category: "info" },
-  { keyword: "항공권", category: "info" },
-  { keyword: "여행", category: "info" },
-  { keyword: "캠핑", category: "info" },
+  // Finance — 금융 시세/지수
+  "주식": "https://finance.naver.com/",
+  "비트코인": "https://upbit.com/",
+  "환율": "https://finance.naver.com/marketindex/",
 
-  // ── Information: Health (3) ──
-  { keyword: "다이어트", category: "info" },
-  { keyword: "헬스", category: "info" },
-  { keyword: "병원", category: "transport" },  // map search for nearby hospitals
+  // Real estate — 부동산 실거래가
+  "부동산": "https://hogangnono.com/",
+  "전세": "https://kbland.kr/",
 
-  // ── Information: Education (3) ──
-  { keyword: "영어", category: "info" },
-  { keyword: "수능", category: "info" },
-  { keyword: "공무원", category: "info" },
+  // Public service prices — 공공 요금/봉급
+  "공무원": "https://www.mpm.go.kr/mpm/info/resultPay/bizSalary/2026/",
+  "택배": "https://parcel.epost.go.kr/",
+  "택시": "https://kakaomobility.com/",
+  "지하철": "https://smrt.co.kr/",
+  "병원": "https://www.hira.or.kr/",
 
-  // ── Information: Transportation (2) ──
-  { keyword: "지하철", category: "transport" },
-  { keyword: "택시", category: "transport" },
+  // Entertainment prices — 구독료/티켓값
+  "영화": "https://www.cgv.co.kr/",
+  "음악": "https://www.melon.com/",
+  "드라마": "https://www.netflix.com/kr/",
+  "웹툰": "https://comic.naver.com/",
 
-  // ── Region / City (10) ──
-  { keyword: "서울", category: "place" },
-  { keyword: "부산", category: "place" },
-  { keyword: "제주도", category: "place" },
-  { keyword: "인천", category: "place" },
-  { keyword: "대구", category: "place" },
-  { keyword: "대전", category: "place" },
-  { keyword: "광주", category: "place" },
-  { keyword: "수원", category: "place" },
-  { keyword: "강남", category: "place" },
-  { keyword: "이태원", category: "transport" },  // map search — namu.wiki article dominated by 2022 disaster
+  // Food & drink prices — 메뉴 가격
+  "커피": "https://www.starbucks.co.kr/menu/drink_list.do",
+  "치킨": "https://www.kyochon.com/menu/chicken.asp",
 
-  // ── Other (5) ──
-  { keyword: "날씨", category: "weather" },
-  { keyword: "뉴스", category: "news" },
-  { keyword: "맛집", category: "food_map" },
-  { keyword: "로또", category: "info" },
-  { keyword: "택배", category: "info" },
-];
+  // Sports — 선수 연봉/이용료
+  "야구": "https://statiz.co.kr/",
+  "축구": "https://www.kleague.com/",
+  "골프": "https://www.teescanner.com/",
 
-// ── URL generation by category ─────────────────────────────────
-function getTargetUrl(keyword: string, category: string): string {
-  const encoded = encodeURIComponent(keyword);
-  switch (category) {
-    case "shopping":
-      return `https://search.shopping.naver.com/search/all?query=${encoded}`;
-    case "weather":
-      return "https://weather.naver.com";
-    case "place":
-    case "wiki":
-      return `https://namu.wiki/w/${encoded}`;
-    case "news":
-      return `https://search.naver.com/search.naver?where=news&query=${encoded}`;
-    case "food_map": {
-      // Avoid "맛집맛집" duplication
-      const mapQuery = keyword === "맛집" ? keyword : keyword + "맛집";
-      return `https://map.naver.com/p/search/${encodeURIComponent(mapQuery)}`;
-    }
-    case "transport":
-      return `https://map.naver.com/p/search/${encoded}`;
-    case "finance":
-    case "sports":
-    case "entertainment":
-    case "realestate":
-    case "info":
-      return `https://search.naver.com/search.naver?query=${encoded}`;
-    default:
-      return `https://search.naver.com/search.naver?query=${encoded}`;
-  }
-}
+  // Travel prices — 여행 가격비교
+  "항공권": "https://www.skyscanner.co.kr/",
+  "호텔": "https://www.goodchoice.kr/",
+  "캠핑": "https://www.gocamping.or.kr/",
+
+  // Education prices — 응시료/교재
+  "영어": "https://www.toeic.co.kr/",
+  "수능": "https://www.ebs.co.kr/",
+
+  // Lifestyle prices — 가격비교/리뷰
+  "맛집": "https://www.siksinhot.com/",
+  "헬스": "https://www.da-gym.co.kr/",
+  "로또": "https://dhlottery.co.kr/",
+
+  // ══════════════════════════════════════════════════════════════
+  // Tier 2: Price comparison sites (~44)
+  // ══════════════════════════════════════════════════════════════
+
+  // Electronics/Appliances → Danawa (가전/전자 가격비교)
+  "노트북": danawa("노트북"),
+  "스마트폰": danawa("스마트폰"),
+  "태블릿": danawa("태블릿"),
+  "모니터": danawa("모니터"),
+  "키보드": danawa("키보드"),
+  "마우스": danawa("마우스"),
+  "무선이어폰": danawa("무선이어폰"),
+  "이어폰": danawa("이어폰"),
+  "충전기": danawa("충전기"),
+  "에어컨": danawa("에어컨"),
+  "냉장고": danawa("냉장고"),
+  "세탁기": danawa("세탁기"),
+  "공기청정기": danawa("공기청정기"),
+  "정수기": danawa("정수기"),
+  "에어프라이어": danawa("에어프라이어"),
+  "전기밥솥": danawa("전기밥솥"),
+  "텀블러": danawa("텀블러"),
+  "유모차": danawa("유모차"),
+  "분유": danawa("분유"),
+  "등산화": danawa("등산화"),
+  "요가매트": danawa("요가매트"),
+  "자전거": danawa("자전거"),
+
+  // Fashion → Musinsa (패션 가격비교)
+  "운동화": musinsa("운동화"),
+  "청바지": musinsa("청바지"),
+  "원피스": musinsa("원피스"),
+  "코트": musinsa("코트"),
+  "후드티": musinsa("후드티"),
+  "가디건": musinsa("가디건"),
+  "티셔츠": musinsa("티셔츠"),
+  "슬리퍼": musinsa("슬리퍼"),
+  "백팩": musinsa("백팩"),
+  "선글라스": musinsa("선글라스"),
+
+  // Beauty → Hwahae (뷰티 성분+가격 비교)
+  "선크림": hwahae("선크림"),
+  "립스틱": hwahae("립스틱"),
+  "마스크팩": hwahae("마스크팩"),
+  "쿠션": hwahae("쿠션"),
+  "향수": hwahae("향수"),
+  "샴푸": hwahae("샴푸"),
+  "세럼": hwahae("세럼"),
+  "치약": hwahae("치약"),
+
+  // Furniture → Ohou (가구 가격비교)
+  "침대": ohou("침대"),
+  "책상": ohou("책상"),
+
+  // Pets → Pet Friends (반려동물 쇼핑)
+  "강아지사료": "https://m.pet-friends.co.kr/",
+  "고양이간식": "https://m.pet-friends.co.kr/",
+
+  // ══════════════════════════════════════════════════════════════
+  // Tier 3: Fallback — best available destination
+  // ══════════════════════════════════════════════════════════════
+
+  // Food → Naver Shopping (식품 가격비교 대안 없음)
+  "라면": naverShopping("라면"),
+  "김치": naverShopping("김치"),
+  "과자": naverShopping("과자"),
+  "떡볶이": naverShopping("떡볶이"),
+  "떡": naverShopping("떡"),
+  "소금빵": naverShopping("소금빵"),
+  "우유": naverShopping("우유"),
+  "생수": naverShopping("생수"),
+  "삼겹살": naverShopping("삼겹살"),
+  "꿀": naverShopping("꿀"),
+  "홍삼": naverShopping("홍삼"),
+
+  // Regions → Naver Real Estate (지역 = 집값)
+  "서울": naverLand("서울"),
+  "부산": naverLand("부산"),
+  "제주도": naverLand("제주도"),
+  "인천": naverLand("인천"),
+  "대구": naverLand("대구"),
+  "대전": naverLand("대전"),
+  "광주": naverLand("광주"),
+  "수원": naverLand("수원"),
+  "강남": naverLand("강남"),
+
+  // Other — keep current best destination
+  "이태원": `https://map.naver.com/p/search/${enc("이태원")}`,
+  "날씨": "https://weather.naver.com",
+  "뉴스": `https://search.naver.com/search.naver?where=news&query=${enc("뉴스")}`,
+  "다이어트": naverShopping("다이어트"),
+  "농구": `https://search.naver.com/search.naver?query=${enc("농구")}`,
+  "여행": `https://search.naver.com/search.naver?query=${enc("여행")}`,
+};
 
 // ── Phase 1: Validate all keywords (before any output) ─────────
 const outputLines: string[] = [];
+const keywords = Object.keys(KEYWORD_URLS);
 
-for (const { keyword, category } of keywords) {
+for (const keyword of keywords) {
   if (EXISTING_KEYWORDS.has(keyword)) {
     console.error(`SKIP: ${keyword} (already exists)`);
     continue;
@@ -191,7 +201,7 @@ for (const { keyword, category } of keywords) {
     console.error(`BLOCKED: ${keyword} — TSV 생성 중단`);
     process.exit(1);
   }
-  outputLines.push(`${keyword}\t${getTargetUrl(keyword, category)}`);
+  outputLines.push(`${keyword}\t${KEYWORD_URLS[keyword]}`);
 }
 
 // ── Phase 2: Output all lines at once (no partial TSV) ─────────
