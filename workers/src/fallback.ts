@@ -53,6 +53,10 @@ export async function fetchFallback(
 
   // Fetch from GitHub
   const url = buildFallbackUrl(keyword, githubRawBase);
+  const parsedUrl = new URL(url);
+  if (parsedUrl.hostname !== "raw.githubusercontent.com") {
+    return null;
+  }
   const headers: Record<string, string> = { "User-Agent": "price-kr-worker" };
   if (githubToken) {
     headers["Authorization"] = `token ${githubToken}`;

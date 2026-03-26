@@ -59,7 +59,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // @ts-ignore - Cloudflare Workers runtime provides `caches` globally, but TypeScript doesn't know about it
     const cache = caches.default;
-    const cacheKey = request.url; // FIXME(minho@): possible cache-miss attack surface is here. need to strip query params and fragments, or unused path segments. (just use the unfiltered '//domain/keyword' or '//keyword.domain/' as cache key.)
+    const cacheUrl = new URL(request.url);
+    cacheUrl.search = "";
+    cacheUrl.hash = "";
+    const cacheKey = cacheUrl.toString();
     let response = await cache.match(cacheKey);
     if (!response) {
       response = await this._fetch_keyword(request, env);

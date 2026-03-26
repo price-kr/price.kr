@@ -4,6 +4,64 @@
 
 ---
 
+## 2026-03-26 ~23:30 — Witty URL Mapping: "가격" 테마 URL 전면 교체
+
+**작업 내용:**
+97개 키워드의 target URL을 "○○.가격.kr = ○○의 가격을 가장 잘 보여주는 곳" 테마에 맞게 전면 교체.
+
+**3-tier 전략:**
+- **Tier 1 (위트 ~30개):** "가격"을 재미있게 재해석 — 공무원→봉급표(mpm.go.kr), 영화→CGV, 야구→스탯티즈 연봉, 커피→스타벅스 메뉴, 부동산→호갱노노
+- **Tier 2 (가격비교 ~44개):** 전문 가격비교 사이트 — 가전→다나와, 패션→무신사, 뷰티→화해, 가구→오늘의집, 반려동물→펫프렌즈
+- **Tier 3 (유지 ~23개):** 식품→네이버 쇼핑(대안 없음), 지역→네이버 부동산("동네의 가격=집값" 재해석)
+
+**기술적 결정:**
+- `generate-top100-tsv.ts` 전면 리팩터링: 카테고리 기반 switch문 → `KEYWORD_URLS: Record<string, string>` 키워드별 직접 매핑
+- 헬퍼 함수로 사이트별 URL 패턴 추상화: `danawa()`, `musinsa()`, `hwahae()`, `ohou()`, `naverLand()`, `naverShopping()`
+- `data/whitelist.json`에 32개 신규 도메인 추가 (13→45개)
+- validate-first/output-later 패턴 및 blocklist 검증 로직 유지
+
+**웹 조사 결과 (미확정 키워드):**
+- 축구 → K리그 공식(kleague.com), 골프 → 티스캐너(teescanner.com), 헬스 → 다짐(da-gym.co.kr)
+- 날씨/뉴스/다이어트/농구/여행: 적절한 "가격" 해석 없어 현행 유지
+
+---
+
+## 2026-03-26 ~08:30 — Top 100 Korean Keywords Seeding
+
+**작업 내용:**
+한국인이 많이 검색하는 키워드 100개를 사전 등록하여 서비스 초기 콘텐츠를 확보했다.
+
+**수행 단계:**
+1. `data/whitelist.json`에 `weather.naver.com`, `map.naver.com` 도메인 추가
+2. 웹 검색으로 2025-2026 한국 검색 트렌드 조사 (Google Year in Search, 네이버 쇼핑 트렌드)
+3. 97개 신규 키워드 선정 (기존 만두/가방/iphone 제외)
+4. `scripts/generate-top100-tsv.ts` 생성 — 카테고리별 URL 매핑 + blocklist 검증
+5. `seed-data.ts`로 97개 JSON 파일 생성
+6. 전체 52개 테스트 통과 확인
+
+**키워드 선정 기준:**
+- 카테고리: 쇼핑 57개, 정보성 25개, 지역 10개, 기타 5개
+- 쇼핑 키워드는 네이버 쇼핑 검색으로 연결, 지역은 나무위키, 날씨는 weather.naver.com 등 적합한 서비스로 매핑
+- blocklist(브랜드 8개) + profanity-blocklist(비속어 8개) 검증 통과
+
+**기술적 결정:**
+- **Validate-first, output-later 패턴**: 모든 키워드 검증을 완료한 뒤 TSV 출력 → partial TSV 방지
+- **모든 URL에 `encodeURIComponent` 적용**: namu.wiki path 포함 (HTTP Location 헤더는 ASCII만 허용, RFC 7230)
+- **맛집 이중 적용 방지**: keyword === "맛집"이면 접미사 생략
+- **기존 키워드 보호**: `EXISTING_KEYWORDS` Set으로 기존 3개 키워드를 TSV에서 제외 → created 날짜 보존
+
+**KV 동기화:**
+`workflow_dispatch`로 `sync-kv.yml` full-sync 수동 트리거 권장 (incremental은 ~97회 개별 write로 15-25분 CI 소요).
+
+**3-agent 코드 리뷰 후 수정 (5회 반복 검토):**
+- **호텔**: `shopping` → `info` — 네이버 쇼핑에서 호텔 상품이 아닌 예약/정보 검색이 사용자 의도
+- **택시**: `info` → `transport` — 일반 검색보다 네이버 지도에서 택시 찾기가 적합
+- **캠핑**: `shopping` → `info` — "Travel" 코멘트 블록에 있으면서 shopping 카테고리였던 모순 해소
+- **에어팟** → **무선이어폰**: Apple 상표권 리스크 회피를 위해 일반 용어로 교체
+- **이태원**: `place`(나무위키) → `transport`(네이버 지도) — 나무위키 문서가 2022 이태원 참사 내용 위주로 구성되어 지도 검색이 더 적절
+
+---
+
 ## 2026-03-18 ~11:00 — Phase 1 코드 리뷰 3차 (최종) 및 수정
 
 **작업 내용:**

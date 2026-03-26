@@ -1,4 +1,7 @@
-# Require admin approval for blocklist/whitelist/profanity changes
+# Require admin approval for all changes
+* @laeyoung
+
+# Critical files (explicit for visibility)
 data/blocklist.json @laeyoung
 data/whitelist.json @laeyoung
 data/profanity-blocklist.json @laeyoung

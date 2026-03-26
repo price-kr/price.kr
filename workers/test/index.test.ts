@@ -1,15 +1,18 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import worker from "../src/index";
 import type { Env } from "../src/index";
+import * as fallbackModule from "../src/fallback";
 
 // Mock global caches for fallback.ts (only exists in Cloudflare Workers runtime)
 beforeAll(() => {
   if (typeof globalThis.caches === "undefined") {
+    const mockCache = {
+      match: vi.fn(async () => null),
+      put: vi.fn(async () => {}),
+    };
     (globalThis as any).caches = {
-      default: {
-        match: vi.fn(async () => null),
-        put: vi.fn(async () => {}),
-      },
+      default: mockCache,
+      open: vi.fn(async () => mockCache),
     };
   }
 });
@@ -41,6 +44,13 @@ function createRequest(url: string, host: string): Request {
   });
 }
 
+function createCtx(): ExecutionContext {
+  return {
+    waitUntil: vi.fn(),
+    passThroughOnException: vi.fn(),
+  } as unknown as ExecutionContext;
+}
+
 describe("Worker redirect handler", () => {
   it("redirects known Korean keyword", async () => {
     // Use URL-encoded query to avoid Node.js ByteString header restriction
@@ -52,10 +62,10 @@ describe("Worker redirect handler", () => {
       "https://xn--hu1b07h.xn--o39aom.kr/",
       "xn--hu1b07h.xn--o39aom.kr"
     );
-    const res = await worker.fetch(req, env);
+    const res = await worker.fetch(req, env, createCtx());
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe(targetUrl);
-    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=3600, s-maxage=3600, immutable");
   });
 
   it("redirects known ASCII keyword", async () => {
@@ -66,7 +76,7 @@ describe("Worker redirect handler", () => {
       "https://iphone.xn--o39aom.kr/",
       "iphone.xn--o39aom.kr"
     );
-    const res = await worker.fetch(req, env);
+    const res = await worker.fetch(req, env, createCtx());
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe(
       "https://search.shopping.naver.com/search?query=iphone"
@@ -79,7 +89,7 @@ describe("Worker redirect handler", () => {
       "https://unknownword.xn--o39aom.kr/",
       "unknownword.xn--o39aom.kr"
     );
-    const res = await worker.fetch(req, env);
+    const res = await worker.fetch(req, env, createCtx());
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe(
       "https://xn--o39aom.kr/unknownword"
@@ -92,7 +102,7 @@ describe("Worker redirect handler", () => {
       "https://xn--o39aom.kr/",
       "xn--o39aom.kr"
     );
-    const res = await worker.fetch(req, env);
+    const res = await worker.fetch(req, env, createCtx());
     expect(res.status).toBe(404);
   });
 
@@ -109,7 +119,7 @@ describe("Worker redirect handler", () => {
         "https://iphone.xn--o39aom.kr/",
         "iphone.xn--o39aom.kr"
       );
-      const res = await worker.fetch(req, env);
+      const res = await worker.fetch(req, env, createCtx());
       // KV failed, fallback returned null → redirect to web app
       expect(res.status).toBe(302);
       expect(res.headers.get("Location")).toBe("https://xn--o39aom.kr/iphone");
@@ -120,19 +130,19 @@ describe("Worker redirect handler", () => {
 
   it("redirects via fallback when KV returns null but GitHub has data", async () => {
     const env = createEnv(); // empty KV
-    const fallbackJson = JSON.stringify({ keyword: "iphone", url: "https://example.com/iphone", created: "2026-01-01" });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(async () => new Response(fallbackJson, { status: 200 }));
+    // Mock fetchFallback directly (Node.js cannot create Request("keyword") needed by CF Cache API)
+    const spy = vi.spyOn(fallbackModule, "fetchFallback").mockResolvedValue("https://example.com/iphone");
     try {
       const req = createRequest(
         "https://iphone.xn--o39aom.kr/",
         "iphone.xn--o39aom.kr"
       );
-      const res = await worker.fetch(req, env);
+      const res = await worker._fetch_keyword(req, env);
       expect(res.status).toBe(302);
       expect(res.headers.get("Location")).toBe("https://example.com/iphone");
+      expect(spy).toHaveBeenCalledWith("iphone", env.GITHUB_RAW_BASE, undefined);
     } finally {
-      globalThis.fetch = originalFetch;
+      spy.mockRestore();
     }
   });
 
@@ -142,7 +152,7 @@ describe("Worker redirect handler", () => {
       "https://iphone.xn--o39aom.kr/",
       "iphone.xn--o39aom.kr"
     );
-    const res = await worker.fetch(req, env);
+    const res = await worker.fetch(req, env, createCtx());
     expect(res.status).toBe(503);
     const html = await res.text();
     expect(html).toContain("일시적인 오류가 발생했습니다");
@@ -154,7 +164,7 @@ describe("Worker redirect handler", () => {
       "https://iPhone.xn--o39aom.kr/",
       "iPhone.xn--o39aom.kr"
     );
-    const res = await worker.fetch(req, env);
+    const res = await worker.fetch(req, env, createCtx());
     expect(res.status).toBe(302);
     expect(res.headers.get("Location")).toBe("https://example.com/iphone");
   });
