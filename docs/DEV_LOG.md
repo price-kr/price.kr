@@ -31,6 +31,11 @@
 **KV 동기화:**
 `workflow_dispatch`로 `sync-kv.yml` full-sync 수동 트리거 권장 (incremental은 ~97회 개별 write로 15-25분 CI 소요).
 
+**3-agent 코드 리뷰 후 카테고리 수정 (3회 반복 검토):**
+- **호텔**: `shopping` → `info` — 네이버 쇼핑에서 호텔 상품이 아닌 예약/정보 검색이 사용자 의도
+- **택시**: `info` → `transport` — 일반 검색보다 네이버 지도에서 택시 찾기가 적합
+- **캠핑**: `shopping` → `info` — "Travel" 코멘트 블록에 있으면서 shopping 카테고리였던 모순 해소
+
 ---
 
 ## 2026-03-18 ~11:00 — Phase 1 코드 리뷰 3차 (최종) 및 수정
