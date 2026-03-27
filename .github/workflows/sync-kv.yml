@@ -69,7 +69,7 @@ jobs:
 
               # Retry up to 3 times
               for i in 1 2 3; do
-                wrangler kv key put --namespace-id="$CF_KV_NAMESPACE_ID" "$KEYWORD" "$URL" && break
+                wrangler kv key put --remote --namespace-id="$CF_KV_NAMESPACE_ID" "$KEYWORD" "$URL" && break
                 echo "Retry $i..."
                 sleep 2
               done
@@ -88,7 +88,7 @@ jobs:
               KEYWORD=$(basename "$file" .json)
               echo "Deleting from KV: $KEYWORD"
               for i in 1 2 3; do
-                wrangler kv key delete --namespace-id="$CF_KV_NAMESPACE_ID" "$KEYWORD" && break
+                wrangler kv key delete --remote --namespace-id="$CF_KV_NAMESPACE_ID" "$KEYWORD" && break
                 echo "Retry $i..."
                 sleep 2
               done
@@ -105,4 +105,4 @@ jobs:
           find data -name '*.json' ! -name 'blocklist.json' ! -name 'whitelist.json' ! -name 'profanity-blocklist.json' -exec cat {} + | \
             jq -s '[.[] | select(.keyword != null and .url != null) | {key: .keyword, value: .url}]' > /tmp/kv-bulk.json
 
-          wrangler kv bulk put --namespace-id="$CF_KV_NAMESPACE_ID" /tmp/kv-bulk.json
+          wrangler kv bulk put --remote --namespace-id="$CF_KV_NAMESPACE_ID" /tmp/kv-bulk.json
