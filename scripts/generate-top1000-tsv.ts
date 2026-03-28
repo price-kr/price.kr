@@ -213,6 +213,7 @@ const TIER1_KEYWORDS: Record<string, string> = {
   "타투": `https://search.naver.com/search.naver?query=${enc("타투 가격")}`,
   "필러": `https://search.naver.com/search.naver?query=${enc("필러 가격")}`,
   "보톡스": `https://search.naver.com/search.naver?query=${enc("보톡스 가격")}`,
+  "치과": "https://www.hira.or.kr/",
   "임플란트": "https://www.hira.or.kr/",
   "탈모치료": `https://search.naver.com/search.naver?query=${enc("탈모치료 비용")}`,
 
