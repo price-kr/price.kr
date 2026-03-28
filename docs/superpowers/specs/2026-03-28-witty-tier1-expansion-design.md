@@ -93,14 +93,19 @@
 
 구현 전에 웹검색으로 최종 URL을 확정하고, 아래 도메인 중 실제 사용되는 것만 추가한다.
 
+**이미 whitelist에 존재하는 도메인** (추가 불필요, 우선 활용):
+- `www.hira.or.kr` — 건강보험심사평가원 (치과, 임플란트 등 의료비)
+- `www.koroad.or.kr` — 도로교통공단 (면허 응시료)
+- `www.mpm.go.kr` — 인사혁신처 (공무원 봉급)
+
+**신규 추가 필요 도메인:**
+
 | 도메인 | 용도 | 신뢰도 |
 |--------|------|--------|
 | `www.minimumwage.go.kr` | 최저임금위원회 | 정부 |
 | `www.mma.go.kr` | 병무청 (병사봉급) | 정부 |
 | `www.assembly.go.kr` | 국회 (의원연봉) | 정부 |
 | `www.efine.go.kr` | 경찰청 교통범칙금 | 정부 |
-| `www.mohw.go.kr` | 보건복지부 | 정부 |
-| `www.koroad.or.kr` | 도로교통공단 (면허응시료) | 공공 |
 | `kream.co.kr` | KREAM (명품리세일) | 민간 |
 | `www.saramin.co.kr` | 사람인 (직종별연봉) | 민간 |
 | `work.go.kr` | 워크넷 (직업정보) | 정부 |
@@ -128,14 +133,14 @@
 
 ```bash
 # 1. 스크립트에 키워드 추가 후 (--force 없이 실행 → 새 키워드만 출력)
-npx tsx scripts/generate-top1000-tsv.ts > scripts/top1000-keywords.tsv
+npx tsx scripts/generate-top1000-tsv.ts > /tmp/new-keywords.tsv
 # 2. JSON 파일 생성 (새 키워드만 생성됨)
-npx tsx scripts/seed-data.ts scripts/top1000-keywords.tsv ./data
-# 3. TSV 전체 아카이브 별도 생성 (문서화 용도, seed-data에 연결하지 않음)
-npx tsx scripts/generate-top1000-tsv.ts --force > /tmp/full-keywords-archive.tsv
-cp /tmp/full-keywords-archive.tsv scripts/top1000-keywords.tsv
+npx tsx scripts/seed-data.ts /tmp/new-keywords.tsv ./data
+# 3. TSV 전체 아카이브 생성 (문서화 용도, seed-data에 연결하지 않음)
+npx tsx scripts/generate-top1000-tsv.ts --force > scripts/top1000-keywords.tsv
 # 4. 테스트
 npm test
+# 5. 이 시점에서 git add (step 3의 최종 TSV + 새 JSON 파일들)
 ```
 
 ## 비변경 사항
