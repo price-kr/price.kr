@@ -35,9 +35,10 @@ export function SearchBar({ keywords }: { keywords: string[] }) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-    } else if (e.key === "Enter" && activeIndex >= 0 && activeIndex < suggestions.length) {
+    } else if (e.key === "Enter" && suggestions.length > 0) {
       e.preventDefault();
-      handleSelect(suggestions[activeIndex]);
+      const idx = activeIndex >= 0 ? activeIndex : 0;
+      handleSelect(suggestions[idx]);
     } else if (e.key === "Escape") {
       setShowSuggestions(false);
       setActiveIndex(-1);
