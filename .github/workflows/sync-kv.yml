@@ -44,6 +44,14 @@ jobs:
             if [ -z "$CHANGED" ] && [ -z "$DELETED" ]; then
               echo "mode=none" >> $GITHUB_OUTPUT
             else
+              # Fall back to full sync when too many files changed (avoids
+              # sequential API calls that may hit Cloudflare rate limits)
+              CHANGED_COUNT=$(echo "$CHANGED" | grep -c . || echo 0)
+              if [ "$CHANGED_COUNT" -gt 100 ]; then
+                echo "Large diff ($CHANGED_COUNT files), falling back to full sync"
+                echo "mode=full" >> $GITHUB_OUTPUT
+                exit 0
+              fi
               echo "mode=incremental" >> $GITHUB_OUTPUT
               if [ -n "$CHANGED" ]; then
                 echo "$CHANGED" > /tmp/changed-files.txt

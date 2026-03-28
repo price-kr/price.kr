@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-03-28 ~00:10 — Keyword Expansion: 100 → 1000
+
+**작업 내용:**
+Preset 키워드를 101개에서 1002개로 확장. `generate-top100-tsv.ts`를 `generate-top1000-tsv.ts`로 교체하고 카테고리 기반 아키텍처로 리팩터링.
+
+**아키텍처 결정:**
+- `CategoryDef` 인터페이스 도입: `{ name, defaultUrl, keywords[], overrides? }` — 카테고리별 기본 URL 함수 + 예외 매핑
+- Tier 1 (위트형 ~80개): `TIER1_KEYWORDS: Record<string, string>`으로 수동 URL 유지
+- Tier 2-3 (카테고리형 ~920개): 23개 `CategoryDef`로 키워드 배열 + URL 자동 생성
+- `EXISTING_KEYWORDS`를 하드코딩(3개) → `data/` 디렉토리 동적 스캔으로 교체하여 `created` 날짜 보존 자동화
+- 중복 키워드 자동 감지 및 스킵 (7개 중복 발견/처리)
+
+**신규 URL 헬퍼 8개 추가:**
+`encar`, `yes24`, `petFriends`, `goodChoice`, `siksinhot`, `coupang`, `naverMap`, `oliveyoung`
+
+**whitelist.json 확장:**
+47개 → 78개 도메인 (encar, yes24, oliveyoung, interpark, dominos, steam, spotify 등)
+
+**23개 카테고리:**
+식품, 가전, 패션, 뷰티, 가구, 지역, 육아, 반려동물, 건강, 스포츠, 자동차, 도서, 여행, 금융, 엔터테인먼트, 사무, 원예, 결혼, 디지털서비스, 외식, 공공서비스, 부동산상세, 라이프스타일
+
+**변경 파일:**
+- `scripts/generate-top1000-tsv.ts` (신규)
+- `scripts/top1000-keywords.tsv` (생성된 TSV)
+- `data/whitelist.json` (도메인 추가)
+- `data/**/*.json` (901개 신규 키워드 JSON)
+- `scripts/generate-top100-tsv.ts`, `scripts/top100-keywords.tsv` (삭제)
+
+**변경 불필요 확인:** seed-data.ts, sync-kv.ts, web 앱, Workers, GitHub Actions 모두 호환성 확인됨.
+
+**검증:** 52개 테스트 ALL PASS (workers 19 + web 10 + scripts 23)
+
+---
+
 ## 2026-03-26 ~23:30 — Witty URL Mapping: "가격" 테마 URL 전면 교체
 
 **작업 내용:**

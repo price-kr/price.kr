@@ -20,7 +20,7 @@
 
 ## 외부 도메인 의존성
 
-현재 97개 키워드가 **35개 외부 도메인**에 의존합니다.
+현재 약 1000개 키워드가 **78개 외부 도메인**에 의존합니다.
 
 ### 집중 리스크 (다수 키워드 의존)
 
@@ -69,15 +69,15 @@
 
 2. **새 URL 결정**: 해당 사이트의 변경된 URL을 찾거나, 대안 사이트 선정
 
-3. **스크립트 수정**: `scripts/generate-top100-tsv.ts`에서 해당 키워드 URL 변경
+3. **스크립트 수정**: `scripts/generate-top1000-tsv.ts`에서 해당 키워드 URL 변경
 
 4. **재생성 및 커밋**:
    ```bash
    cd scripts
-   npx tsx generate-top100-tsv.ts > top100-keywords.tsv
-   npx tsx seed-data.ts top100-keywords.tsv ../data
+   npx tsx generate-top1000-tsv.ts > top1000-keywords.tsv
+   npx tsx seed-data.ts top1000-keywords.tsv ../data
    cd ..
-   git add scripts/generate-top100-tsv.ts scripts/top100-keywords.tsv data/
+   git add scripts/generate-top1000-tsv.ts scripts/top1000-keywords.tsv data/
    git commit -m "fix: update broken URL for 키워드"
    git push
    ```
@@ -130,7 +130,7 @@ GitHub Actions → `sync-kv.yml` → "Run workflow" 버튼:
 
 ### 분기별
 
-- [ ] 전체 97개 키워드 URL 접속 테스트
+- [ ] 전체 약 1000개 키워드 URL 접속 테스트
 - [ ] whitelist.json 도메인 유효성 확인
 - [ ] 다나와 `dsearch.php` 검색 경로 정상 작동 확인
 
