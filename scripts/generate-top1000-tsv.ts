@@ -64,7 +64,7 @@ const naverLand = (kw: string) =>
 
 // New helpers
 const encar = (kw: string) =>
-  `https://www.encar.com/dc/dc_carsearchlist.do?carType=kor&searchType=model&dession=${enc(kw)}`;
+  `https://www.encar.com/dc/dc_carsearchlist.do?carType=kor&searchType=model&q=${enc(kw)}`;
 
 const yes24 = (kw: string) =>
   `https://www.yes24.com/Product/Search?domain=ALL&query=${enc(kw)}`;
@@ -222,7 +222,7 @@ const CATEGORIES: CategoryDef[] = [
       // Beverages
       "맥주", "소주", "와인", "위스키", "막걸리", "탄산수", "주스", "두유", "녹차", "커피캡슐",
       // Additional
-      "콩나물", "시금치", "미역", "다시마", "어묵", "순대", "족발", "보쌈재료",
+      "콩나물", "시금치", "미역", "다시마", "어묵", "순대", "보쌈재료",
       "호두", "아몬드", "캐슈넛", "땅콩", "건포도", "말린망고", "육포", "건어물",
       "냉동만두", "냉동피자", "즉석밥", "컵라면", "통조림", "잼", "꿀버터아몬드", "젓갈",
     ],
@@ -249,7 +249,7 @@ const CATEGORIES: CategoryDef[] = [
       // Additional
       "전자사전", "전자피아노", "미디키보드", "액션캠", "드론", "DSLR", "미러리스",
       "삼각대", "메모리카드", "카메라렌즈", "공유기", "허브", "랜케이블",
-      "전기그릴", "와플메이커", "에스프레소머신", "전기포트",
+      "전기그릴", "와플메이커", "에스프레소머신",
     ],
   },
 
@@ -270,7 +270,7 @@ const CATEGORIES: CategoryDef[] = [
       // Additional
       "트레이닝복", "카고팬츠", "데님재킷", "야구점퍼", "무스탕", "베스트", "폴로셔츠",
       "린넨셔츠", "와이드팬츠", "미니스커트", "롱스커트", "점프수트",
-      "크로스백", "숄더백", "에코백", "파우치",
+      "숄더백", "에코백", "파우치",
     ],
   },
 
@@ -400,7 +400,7 @@ const CATEGORIES: CategoryDef[] = [
       "축구화", "축구공", "야구글러브", "야구배트", "농구화", "농구공", "배드민턴라켓",
       "테니스라켓", "탁구라켓", "골프채", "골프공", "골프장갑",
       // Additional
-      "스키복", "스키장비", "스노보드", "수영복", "수경", "수영모", "래쉬가드",
+      "스키복", "스키장비", "스노보드", "수경", "수영모", "래쉬가드",
       "서핑보드", "낚시대", "낚시릴", "루어", "구명조끼",
     ],
   },
@@ -419,10 +419,7 @@ const CATEGORIES: CategoryDef[] = [
       "오토바이", "오토바이헬멧", "오토바이장갑",
       "유아안전시트", "자동차방석", "차박매트", "차박텐트",
     ],
-    overrides: {
-      "타이어": encar("타이어"),
-      "엔진오일": encar("엔진오일"),
-    },
+    // 타이어, 엔진오일 use default naverShopping (no override needed)
   },
 
   // ── 12. Books / Education (도서/교육) ──
@@ -508,8 +505,8 @@ const CATEGORIES: CategoryDef[] = [
     defaultUrl: naverShopping,
     keywords: [
       // New
-      "화분", "화분받침", "원예용흙", "비료", "씨앗", "모종", "물뿌리개", "전정가위",
-      "화분선반", "행잉화분", "다육이", "선인장", "공기정화식물", "허브",
+      "화분받침", "원예용흙", "비료", "씨앗", "모종", "물뿌리개", "전정가위",
+      "화분선반", "행잉화분", "다육이", "선인장", "공기정화식물",
       "전동드릴", "드라이버세트", "망치", "줄자", "수평계", "글루건",
     ],
   },
@@ -590,7 +587,7 @@ const CATEGORIES: CategoryDef[] = [
       "향초", "아로마오일", "명상쿠션", "요가복", "필라테스복",
       "카메라가방", "앨범제작", "스티커", "마스킹테이프", "스탬프",
       "직소퍼즐", "크로스스티치", "뜨개질", "수채화물감", "유화물감",
-      "캘리그라피펜", "타로카드", "독서등", "북커버", "독서대",
+      "캘리그라피펜", "타로카드", "독서등", "북커버",
     ],
   },
 ];
@@ -613,20 +610,27 @@ function buildKeywordUrls(): Record<string, string> {
 }
 
 // ── Phase 1: Build and validate ────────────────────────────────
+const forceAll = process.argv.includes("--force");
 const KEYWORD_URLS = buildKeywordUrls();
 const outputLines: string[] = [];
 const keywords = Object.keys(KEYWORD_URLS);
 
 for (const keyword of keywords) {
-  if (EXISTING_KEYWORDS.has(keyword)) {
-    console.error(`SKIP: ${keyword} (already exists)`);
-    continue;
+  if (!forceAll) {
+    const checkKeyword = /[a-zA-Z]/.test(keyword) ? keyword.toLowerCase() : keyword;
+    if (EXISTING_KEYWORDS.has(keyword) || EXISTING_KEYWORDS.has(checkKeyword)) {
+      console.error(`SKIP: ${keyword} (already exists)`);
+      continue;
+    }
   }
   if (isBlockedKeyword(keyword, allBlocked)) {
     console.error(`BLOCKED: ${keyword} — TSV generation aborted`);
     process.exit(1);
   }
-  outputLines.push(`${keyword}\t${KEYWORD_URLS[keyword]}`);
+  // English keywords must be lowercased per CLAUDE.md: "Always lowercased in
+  // both filename and JSON keyword field to ensure KV key matches filename"
+  const finalKeyword = /[a-zA-Z]/.test(keyword) ? keyword.toLowerCase() : keyword;
+  outputLines.push(`${finalKeyword}\t${KEYWORD_URLS[keyword]}`);
 }
 
 // ── Phase 2: Output all lines at once ──────────────────────────
