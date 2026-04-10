@@ -1,8 +1,16 @@
 # 가격.kr — 커뮤니티 기반 한글 단축 URL 서비스
 
+> Community-driven Korean subdomain URL shortener. Type `만두.가격.kr` to find the best price for 만두 (dumplings).
+
 한글 키워드로 최저가를 찾아보세요. `만두.가격.kr` → 네이버 쇼핑 최저가 페이지로 바로 이동!
 
 커뮤니티 투표로 각 키워드의 목적지 URL이 결정됩니다.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
+[![tests](https://img.shields.io/badge/tests-52%20passed-brightgreen.svg)](#)
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![language](https://img.shields.io/badge/language-한국어-blue.svg)](#)
 
 ## 사용법
 
@@ -13,6 +21,40 @@
 가방.가격.kr  → 가방 최저가 검색
 iphone.가격.kr → iPhone 최저가 검색
 ```
+
+## 참여하기
+
+누구나 참여할 수 있습니다! 아래 세 가지 방법 중 하나를 선택하세요.
+
+### 🗳️ 키워드 제안하기
+
+새로운 키워드-URL 매핑을 제안합니다. [새 단어 제안하기 →](../../issues/new?template=new-keyword.yml)
+
+### 👍 투표로 참여하기
+
+등록 대기 중인 키워드에 투표하세요. [열린 PR 보기 →](../../pulls)
+
+PR에서 👍 반응을 달면 투표 완료! 3개 이상 모이면 자동 등록됩니다.
+
+### 💻 코드 기여
+
+버그 수정, 기능 개선 등 코드로 기여합니다. [기여 가이드 →](CONTRIBUTING.md)
+
+## 키워드 등록 프로세스
+
+```
+Issue 제안 → 자동 검증 → PR 생성 → 커뮤니티 투표 → 자동 병합 → KV 동기화
+   ┌─────┐    ┌─────┐    ┌─────┐    ┌──────────┐    ┌──────┐    ┌────────┐
+   │ 제안 │───→│ 검증 │───→│  PR  │───→│ 👍 투표  │───→│ 병합  │───→│ KV 반영│
+   └─────┘    └─────┘    └─────┘    └──────────┘    └──────┘    └────────┘
+   Issue 작성   블록리스트   자동 생성   3+ 찬성        24시간     Cloudflare
+               비속어 필터              (변경 5+)      대기 후     자동 동기화
+               자모 우회 탐지
+               도메인 화이트리스트
+               Safe Browsing
+```
+
+`admin-approved` 라벨이 있는 PR은 투표/대기 없이 즉시 병합됩니다.
 
 ## 아키텍처
 
@@ -33,18 +75,24 @@ Cloudflare (리다이렉트) + Vercel (웹앱) 하이브리드 구조로 월 $0 
 
 ```
 price.kr/
-├── workers/          # Cloudflare Workers 리다이렉트 엔진
-│   └── src/          #   subdomain.ts, fallback.ts, index.ts
-├── web/              # Next.js 15 App Router (Vercel)
-│   ├── app/          #   검색 UI, [keyword] 페이지, 개인정보처리방침
-│   ├── components/   #   SearchBar (자동완성, 초성 검색)
-│   └── lib/          #   hangul.ts, keywords.ts
-├── scripts/          # 공유 유틸리티
-│   ├── hangul-path.ts      # 초성 추출, 키워드→파일 경로 계산
+├── LICENSE               # MIT 라이선스
+├── CODE_OF_CONDUCT.md    # 행동 강령
+├── CONTRIBUTING.md       # 기여 가이드
+├── SECURITY.md           # 보안 정책
+├── CLAUDE.md             # Claude Code 설정
+├── workers/              # Cloudflare Workers 리다이렉트 엔진
+│   └── src/              #   subdomain.ts, fallback.ts, index.ts
+├── web/                  # Next.js 15 App Router (Vercel)
+│   ├── app/              #   검색 UI, [keyword] 페이지, 개인정보처리방침
+│   ├── components/       #   SearchBar (자동완성, 초성 검색)
+│   └── lib/              #   hangul.ts, keywords.ts
+├── scripts/              # 공유 유틸리티
+│   ├── hangul-path.ts    #   초성 추출, 키워드→파일 경로 계산
 │   ├── validate-keyword.ts # 키워드 검증 (블록리스트, 비속어, 자모 우회 탐지)
-│   ├── sync-kv.ts          # JSON → Cloudflare KV 동기화
-│   └── seed-data.ts        # TSV → 키워드 JSON 일괄 생성
-├── data/             # 키워드 데이터 (3단계 디렉토리 구조)
+│   ├── sync-kv.ts        #   JSON → Cloudflare KV 동기화
+│   ├── seed-data.ts      #   TSV → 키워드 JSON 일괄 생성
+│   └── generate-top1000-tsv.ts  # Top 1000 키워드 TSV 생성
+├── data/                 # 키워드 데이터 (3단계 디렉토리 구조)
 │   ├── {초성}/{첫글자}/{keyword}.json  # 한글 키워드
 │   ├── _en/{keyword}.json              # 영문 키워드
 │   ├── _num/{keyword}.json             # 숫자 시작 키워드
@@ -52,29 +100,35 @@ price.kr/
 │   ├── whitelist.json        # 허용 도메인 목록
 │   └── profanity-blocklist.json  # 비속어 블록리스트
 ├── .github/
-│   ├── workflows/
-│   │   ├── validate-issue.yml  # Issue → 키워드/URL 검증 → 자동 PR
-│   │   ├── sync-kv.yml         # main push → KV 동기화
-│   │   └── auto-merge.yml      # 커뮤니티 투표 → 자동 병합
-│   └── ISSUE_TEMPLATE/         # 제안/변경/삭제 양식
+│   ├── CODEOWNERS            # 코드 리뷰 규칙
+│   ├── PULL_REQUEST_TEMPLATE.md  # PR 체크리스트
+│   ├── ISSUE_TEMPLATE/       # Issue 양식 (제안/변경/삭제/버그/기능)
+│   └── workflows/
+│       ├── validate-issue.yml  # Issue → 키워드/URL 검증 → 자동 PR
+│       ├── sync-kv.yml         # main push → KV 동기화
+│       └── auto-merge.yml      # 커뮤니티 투표 → 자동 병합
 └── docs/
     ├── PRD.md              # 제품 요구사항 정의서
+    ├── OPERATIONS.md       # 운영 가이드
     ├── DEV_PROGRESS.md     # 개발 진행 상황
-    └── DEV_LOG.md          # 기술적 결정 기록
+    ├── DEV_LOG.md          # 기술적 결정 기록
+    ├── PLAN-top100-keywords.md  # 키워드 확장 계획
+    └── superpowers/        # 설계 문서 및 구현 계획
 ```
 
-## 키워드 등록 프로세스
+## 기술 스택
 
-1. GitHub Issue로 키워드 제안 (템플릿 제공)
-2. 자동 검증: 블록리스트, 비속어, 자모 우회, Safe Browsing, 도메인 화이트리스트
-3. 검증 통과 시 자동 PR 생성
-4. 커뮤니티 투표 (👍 3개 이상, 변경은 5개 이상)
-5. 투표 충족 + 24시간 대기 후 자동 병합
-6. main push 시 Cloudflare KV 자동 동기화
+| 영역 | 기술 |
+|------|------|
+| 리다이렉트 엔진 | Cloudflare Workers + KV + Cache API |
+| 웹 앱 | Next.js 15 App Router (Vercel Free) |
+| 자동화 | GitHub Actions (Issue 검증, KV 동기화, 자동 병합) |
+| 데이터 | GitHub 저장소 (JSON 파일, 3단계 디렉토리 구조) |
+| 테스트 | Vitest 2.x |
+| 보안 | Open redirect 방지, Script injection 방지, Google Safe Browsing |
 
-`admin-approved` 라벨이 있는 PR은 투표/대기 없이 즉시 병합됩니다.
-
-## 셋업 가이드
+<details>
+<summary><strong>셋업 가이드 (포크/자체 운영 시)</strong></summary>
 
 ### 1. 사전 요구사항
 
@@ -214,7 +268,7 @@ cd workers && npm run dev
 # Web 로컬 개발 (Next.js dev server)
 cd web && npm run dev
 
-# 전체 테스트 (52 tests)
+# 전체 테스트
 npm test
 ```
 
@@ -228,7 +282,7 @@ cd workers && npm run deploy
 # KV 동기화는 main push 시 GitHub Actions가 자동 실행
 ```
 
-## 도메인 설정 트러블슈팅
+### 도메인 설정 트러블슈팅
 
 | 증상 | 원인 | 해결 |
 |------|------|------|
@@ -238,21 +292,10 @@ cd workers && npm run deploy
 | `curl`로 테스트 시 리다이렉트 안 됨 | Host 헤더에 한글 대신 punycode 사용 필요 | `curl -I https://xn--hu1b07h.xn--o39aom.kr` (만두.가격.kr) |
 | 새 키워드 등록 후 리다이렉트 안 됨 | KV 전파 지연 (최대 60초) 또는 Workers 엣지 캐시 (최대 1시간 TTL) | KV 확인: `wrangler kv key get`, 캐시 문제 시 Cloudflare 대시보드에서 Purge Cache 실행 |
 
-## 기여하기
-
-[기여 가이드](CONTRIBUTING.md)를 참고해 주세요.
-
-## 기술 스택
-
-| 영역 | 기술 |
-|------|------|
-| 리다이렉트 엔진 | Cloudflare Workers + KV + Cache API |
-| 웹 앱 | Next.js 15 App Router (Vercel Free) |
-| 자동화 | GitHub Actions (Issue 검증, KV 동기화, 자동 병합) |
-| 데이터 | GitHub 저장소 (JSON 파일, 3단계 디렉토리 구조) |
-| 테스트 | Vitest 2.x |
-| 보안 | Open redirect 방지, Script injection 방지, Google Safe Browsing |
+</details>
 
 ## 라이선스
 
-MIT
+[MIT](LICENSE)
+
+이 프로젝트의 소스 코드는 MIT 라이선스로 공개됩니다. 단, `가격.kr` 도메인 및 서비스 인프라(Cloudflare, Vercel 설정 등)의 소유권과 운영 권한은 라이선스 범위에 포함되지 않습니다.
