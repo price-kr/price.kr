@@ -1,6 +1,16 @@
 {
   "name": "price-kr",
+  "description": "커뮤니티 기반 한글 단축 URL 서비스",
   "private": true,
+  "license": "MIT",
+  "author": "Laeyoung Chang",
+  "contributors": ["Minho Ryang"],
+  "homepage": "https://가격.kr",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/price-kr/price.kr.git"
+  },
+  "keywords": ["korean", "url-shortener", "community", "cloudflare-workers", "nextjs"],
   "workspaces": ["workers", "web", "scripts"],
   "engines": {
     "node": ">=20"
