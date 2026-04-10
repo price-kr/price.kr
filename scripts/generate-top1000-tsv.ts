@@ -194,6 +194,74 @@ const TIER1_KEYWORDS: Record<string, string> = {
   "이태원": `https://map.naver.com/p/search/${enc("이태원")}`,
   "다이어트": naverShopping("다이어트"),
   "여행": "https://flightdeal.kr/",
+
+  // ══════════════════════════════════════════════════════════════
+  // Tier 1 expansion: Witty "가격" reinterpretation
+  // ══════════════════════════════════════════════════════════════
+
+  // Life events — 인생 이벤트 비용
+  "결혼": `https://search.naver.com/search.naver?query=${enc("결혼 비용 평균")}`,
+  "출산": `https://search.naver.com/search.naver?query=${enc("출산 비용")}`,
+  "장례": `https://search.naver.com/search.naver?query=${enc("장례 비용")}`,
+  "이혼": `https://search.naver.com/search.naver?query=${enc("이혼 비용 위자료")}`,
+  "입양": `https://search.naver.com/search.naver?query=${enc("입양 절차 비용")}`,
+
+  // Medical/cosmetic procedures — 시술비
+  "교정": `https://search.naver.com/search.naver?query=${enc("치아교정 비용")}`,
+  "라식": `https://search.naver.com/search.naver?query=${enc("라식 가격 비교")}`,
+  "성형": `https://search.naver.com/search.naver?query=${enc("성형 비용")}`,
+  "타투": `https://search.naver.com/search.naver?query=${enc("타투 가격")}`,
+  "필러": `https://search.naver.com/search.naver?query=${enc("필러 가격")}`,
+  "보톡스": `https://search.naver.com/search.naver?query=${enc("보톡스 가격")}`,
+  "치과": "https://www.hira.or.kr/",
+  "임플란트": "https://www.hira.or.kr/",
+  "탈모치료": `https://search.naver.com/search.naver?query=${enc("탈모치료 비용")}`,
+
+  // Career salaries — 직업 연봉 시리즈
+  "의사": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "변호사": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "판사": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "교사": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "소방관": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "경찰": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "파일럿": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "약사": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "간호사": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+  "회계사": "https://www.saramin.co.kr/zf_user/jobs/industry-salary",
+
+  // Public fees — 공공요금/벌금
+  "군대": "https://www.mma.go.kr/",
+  "국회의원": "https://www.assembly.go.kr/",
+  "과태료": "https://www.efine.go.kr/",
+  "주차위반": "https://www.efine.go.kr/",
+  "음주운전": "https://www.efine.go.kr/",
+
+  // Exam/license fees — 응시료
+  "한국사": `https://search.naver.com/search.naver?query=${enc("한국사능력검정시험 응시료")}`,
+  "공인중개사": `https://search.naver.com/search.naver?query=${enc("공인중개사 시험 응시료")}`,
+
+  // Time/labor — 시간과 노동의 가격
+  "시간": "https://www.minimumwage.go.kr/",
+  "야근": `https://search.naver.com/search.naver?query=${enc("야근수당 계산기")}`,
+  "알바": `https://search.naver.com/search.naver?query=${enc("알바 시급 검색")}`,
+  "퇴직": `https://search.naver.com/search.naver?query=${enc("퇴직금 계산기")}`,
+
+  // Legal consequences — 법적 대가
+  "실수": "https://www.efine.go.kr/",
+  "명예훼손": `https://search.naver.com/search.naver?query=${enc("명예훼손 벌금")}`,
+
+  // Korean culture — 한국 문화 시세
+  "세뱃돈": `https://search.naver.com/search.naver?query=${enc("세뱃돈 시세")}`,
+  "추석선물": `https://search.shopping.naver.com/search/all?query=${enc("추석선물세트")}`,
+  "축의금": `https://search.naver.com/search.naver?query=${enc("축의금 시세")}`,
+
+  // Misc witty — 기타 위트
+  "명품": "https://kream.co.kr/",
+  "행복": `https://search.naver.com/search.naver?query=${enc("세계 행복 지수 순위")}`,
+  "치킨집창업": "https://www.ftc.go.kr/",
+  "강아지입양": `https://search.naver.com/search.naver?query=${enc("강아지 입양 비용")}`,
+  "고양이입양": `https://search.naver.com/search.naver?query=${enc("고양이 입양 비용")}`,
+  "동물병원": `https://search.naver.com/search.naver?query=${enc("동물병원 진료비")}`,
 };
 
 // ══════════════════════════════════════════════════════════════
