@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-04-10 ~15:00 — 오픈소스 공개 준비 (접근법 B: 커뮤니티 중심)
+
+**작업 내용:**
+가격.kr을 GitHub 오픈소스로 공개하기 위한 준비 작업 완료. 총 8개 태스크 수행.
+
+**변경/생성 파일:**
+- `LICENSE` — MIT 라이선스 신규 생성
+- `CODE_OF_CONDUCT.md` — Contributor Covenant 기반 한국어 행동강령
+- `CONTRIBUTING.md` — 커뮤니티 중심 7섹션 구조로 전면 재작성 (URL 제안/변경/삭제 안내 포함)
+- `README.md` — 배지, 참여하기 섹션, `<details>` 개발자 가이드로 재구성
+- `docs/PRD.md` — 루트의 `PRD.md`를 `docs/` 디렉토리로 이동
+- `.github/PULL_REQUEST_TEMPLATE.md` — PR 작성 가이드 템플릿
+- `.github/ISSUE_TEMPLATE/bug-report.yml` — 버그 신고 이슈 템플릿
+- `.github/ISSUE_TEMPLATE/feature-request.yml` — 기능 제안 이슈 템플릿
+- `.github/ISSUE_TEMPLATE/config.yml` — 이슈 템플릿 설정 (atomic deploy)
+- `package.json` (루트 + 워크스페이스) — license, repository, homepage, author, keywords 메타데이터 추가
+- `package-lock.json` — npm ci 호환성을 위해 복원
+
+**기술적 결정:**
+
+### 1. 접근법 B (커뮤니티 중심) 선택
+- **결정:** 3가지 접근법(A: 최소, B: 커뮤니티 중심, C: 완전 폴리시) 중 B 선택
+- **이유:** 실제 커뮤니티 참여가 서비스의 핵심 가치. 기여 진입 장벽을 낮추는 문서/자동화 인프라에 집중이 최우선 ROI
+- **제외한 것:** 커스텀 도메인 배지, 기여자 목록 위젯 등 현시점에 과잉 설계인 요소
+
+### 2. MIT 라이선스 선택
+- **결정:** Apache 2.0, MIT 중 MIT 선택
+- **이유:** 가장 허용적 라이선스 — 포크 및 재사용 장벽 최소화. 특허 조항이 필요한 엔터프라이즈 프로젝트가 아님
+- **검토 대안:** Apache 2.0 (특허 보호 조항 포함, 한국 오픈소스 커뮤니티에서 상대적으로 복잡하게 인식됨)
+
+### 3. 한국어 전용 문서 (영어 부제목 포함)
+- **결정:** 모든 사용자 문서(CODE_OF_CONDUCT, CONTRIBUTING, README)를 한국어로 작성, 영어 부제목 병기
+- **이유:** 타겟 사용자(한국어 사용자)에게 최적화. 영어 부제목은 GitHub 검색 가독성 확보
+- **검토 대안:** 영/한 병렬 문서 — 유지보수 비용 2배로 현재 단계에서 비효율
+
+### 4. 기존 자동화 파이프라인 유지
+- **결정:** Issue→PR→투표→auto-merge 파이프라인은 변경 없이 유지
+- **이유:** 이미 Phase 1에서 완성된 인프라. CONTRIBUTING.md에서 이 파이프라인을 커뮤니티 참여 흐름으로 안내하는 것으로 충분
+
+**리뷰 프로세스:**
+- 스펙 에이전트 리뷰: 5라운드 반복 검토
+- 구현 플랜 에이전트 리뷰: 4라운드 반복 검토
+
+---
+
 ## 2026-03-28 ~12:00 — Witty Tier 1 Keyword Expansion
 
 **작업 내용:**
