@@ -13,7 +13,16 @@ export default async function HomePage() {
       </p>
       <SearchBar keywords={keywordList} />
       <p className="mt-12 text-sm text-gray-400">
-        커뮤니티가 만들어가는 오픈소스 단축 URL 서비스
+        커뮤니티가 만들어가는{" "}
+        <a 
+          href="https://github.com/price-kr/price.kr" 
+          className="underline hover:text-gray-600 transition-colors"
+          target="_blank" 
+          rel="noopener noreferrer"
+        >
+          오픈소스
+        </a>{" "}
+        단축 URL 서비스
       </p>
     </main>
   );
