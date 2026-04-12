@@ -38,6 +38,28 @@ describe("track", () => {
     );
   });
 
+  it("does nothing when navigator is undefined (SSR)", async () => {
+    process.env.NODE_ENV = "production";
+    Object.defineProperty(globalThis, "navigator", {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    const { track } = await import("../lib/track");
+    expect(() => track("pageview", "/")).not.toThrow();
+  });
+
+  it("does nothing when sendBeacon is not available", async () => {
+    process.env.NODE_ENV = "production";
+    Object.defineProperty(globalThis, "navigator", {
+      value: {},
+      writable: true,
+      configurable: true,
+    });
+    const { track } = await import("../lib/track");
+    expect(() => track("pageview", "/")).not.toThrow();
+  });
+
   it("logs to console in development mode instead of sending beacon", async () => {
     process.env.NODE_ENV = "development";
     const consoleSpy = vi.spyOn(console, "debug").mockImplementation(() => {});

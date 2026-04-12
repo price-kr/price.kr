@@ -250,6 +250,7 @@ describe("Redirect tracking sampling", () => {
       "xn--hu1b07h.xn--o39aom.kr"
     );
     await worker.fetch(req, env, ctx);
+    expect(env.TRACKING.prepare).not.toHaveBeenCalled(); // D1 write skipped
     const waitUntilCalls = (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls;
     expect(waitUntilCalls.length).toBe(1); // only cache.put
     vi.restoreAllMocks();

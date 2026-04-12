@@ -200,6 +200,17 @@ describe("handleTrack", () => {
     expect(stmt.bind).toHaveBeenCalledWith("search", "가방", "가방");
   });
 
+  it("returns 400 for empty keyword", async () => {
+    const env = createTrackEnv();
+    const req = new Request("https://t.xn--o39aom.kr/e", {
+      method: "POST",
+      body: JSON.stringify({ type: "pageview", keyword: "" }),
+      headers: { Origin: "https://xn--o39aom.kr" },
+    });
+    const res = await handleTrack(req, env);
+    expect(res.status).toBe(400);
+  });
+
   it("accepts keyword at exactly 100 chars (boundary)", async () => {
     const env = createTrackEnv();
     const req = new Request("https://t.xn--o39aom.kr/e", {
