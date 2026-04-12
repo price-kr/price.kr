@@ -1,37 +1,45 @@
 name: Check Votes and Auto-Merge
 
 on:
-  # Run on PR reaction events (via schedule since no direct trigger)
   schedule:
     - cron: "0 */6 * * *" # Every 6 hours
+  pull_request_target:
+    types: [labeled] # Instant merge on admin-approved label
   workflow_dispatch:
 
 jobs:
   check-votes:
     runs-on: ubuntu-latest
+    # Skip pull_request_target runs for non-admin labels
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      github.event.label.name == 'admin-approved'
     permissions:
       pull-requests: write
       contents: write
 
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
       - name: Check and merge qualifying PRs
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
             const VOTE_THRESHOLD = 3;
-
-            // Get all open PRs (with pagination)
-            const prs = await github.paginate(github.rest.pulls.list, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              sort: 'created',
-              direction: 'asc'
-            });
-
             const FORBIDDEN_FILES = ['blocklist.json', 'whitelist.json', 'profanity-blocklist.json'];
+
+            // Event-driven: only check the labeled PR
+            // Schedule/manual: check all open PRs
+            let prs;
+            if (context.eventName === 'pull_request_target') {
+              prs = [context.payload.pull_request];
+            } else {
+              prs = await github.paginate(github.rest.pulls.list, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                sort: 'created',
+                direction: 'asc'
+              });
+            }
 
             for (const pr of prs) {
               // Only process keyword PRs
