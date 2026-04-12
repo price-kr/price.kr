@@ -3,6 +3,7 @@ import { fetchFallback } from "./fallback";
 
 export interface Env {
   KEYWORDS: KVNamespace;
+  TRACKING: D1Database;
   MAIN_DOMAIN: string;
   WEB_APP_ORIGIN: string;
   GITHUB_RAW_BASE: string;

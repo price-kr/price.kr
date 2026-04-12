@@ -29,9 +29,23 @@ function createMockKV(data: Record<string, string>): KVNamespace {
   } as unknown as KVNamespace;
 }
 
+function createMockD1(): D1Database {
+  const mockStmt = {
+    bind: vi.fn().mockReturnThis(),
+    run: vi.fn().mockResolvedValue({ success: true }),
+  };
+  return {
+    prepare: vi.fn().mockReturnValue(mockStmt),
+    dump: vi.fn(),
+    batch: vi.fn(),
+    exec: vi.fn(),
+  } as unknown as D1Database;
+}
+
 function createEnv(kvData: Record<string, string> = {}): Env {
   return {
     KEYWORDS: createMockKV(kvData),
+    TRACKING: createMockD1(),
     MAIN_DOMAIN: "xn--o39aom.kr",
     WEB_APP_ORIGIN: "https://xn--o39aom.kr",
     GITHUB_RAW_BASE: "https://raw.githubusercontent.com/laeyoung/price.kr/main",
