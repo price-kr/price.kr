@@ -83,10 +83,13 @@ jobs:
       - name: Parse issue body
         id: parse
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          BODY: ${{ steps.context.outputs.body }}
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
         with:
           script: |
-            const body = `${{ steps.context.outputs.body }}` || '';
-            const issueNumber = parseInt(`${{ steps.context.outputs.issue_number }}`);
+            const body = process.env.BODY || '';
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
             // ... (rest of parsing logic)
             // Use issueNumber instead of context.issue.number
 ```

@@ -14,8 +14,22 @@ jobs:
   validate:
     if: |
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.issue.labels.*.name, 'keyword-proposal') ||
-      contains(github.event.issue.labels.*.name, 'keyword-change')
+      (
+        github.event_name == 'issues' &&
+        github.event.action == 'opened' &&
+        (
+          contains(github.event.issue.labels.*.name, 'keyword-proposal') ||
+          contains(github.event.issue.labels.*.name, 'keyword-change')
+        )
+      ) ||
+      (
+        github.event_name == 'issues' &&
+        github.event.action == 'labeled' &&
+        (
+          github.event.label.name == 'keyword-proposal' ||
+          github.event.label.name == 'keyword-change'
+        )
+      )
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -289,27 +303,13 @@ jobs:
             const fs = require('fs');
             const path = require('path');
 
-            // Re-open issue if it was closed
+            // Check issue state before proceeding — defer re-open until after PR creation
             const { data: issue } = await github.rest.issues.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber
             });
-
-            if (issue.state === 'closed') {
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                state: 'open'
-              });
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: '🔄 재검증 결과가 유효하여 이슈를 다시 오픈합니다.'
-              });
-            }
+            const shouldReopenIssue = issue.state === 'closed';
 
             // Compute file path
             const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
@@ -409,3 +409,20 @@ jobs:
               issue_number: issueNumber,
               body: `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
             });
+
+            // Re-open issue only after PR is successfully created
+            if (shouldReopenIssue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'open'
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: '🔄 재검증 결과가 유효하여 이슈를 다시 오픈합니다.'
+              });
+            }
+

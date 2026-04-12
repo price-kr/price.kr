@@ -36,7 +36,8 @@ The logic will normalize these into a single set of variables (`issue_number`, `
 ### Job Filter (`if` condition)
 The job-level `if` must be updated to account for `workflow_dispatch` and `labeled` events:
 - If `workflow_dispatch`, always run (validation will happen inside).
-- If `issues`, check labels as before, but ensure it only triggers for the *specific* labels we care about during the `labeled` event.
+- If `issues: [opened]`, check labels as before and continue only for issues that have `keyword-proposal` or `keyword-change`.
+- If `issues: [labeled]`, only run when the newly added label itself is `keyword-proposal` or `keyword-change` (by checking `github.event.label.name`). This avoids re-running validation for unrelated labels and prevents unnecessary duplicate PR creation. In other words, the `labeled` path is gated by: `github.event.label.name == 'keyword-proposal' || github.event.label.name == 'keyword-change'`.
 
 ### State Recovery (Auto-Reopen)
 If validation passes:
