@@ -24,8 +24,17 @@ export default function PrivacyPage() {
 
         <h2 className="text-xl font-semibold mt-6">2. 통계 정보</h2>
         <p>
-          서비스 개선을 위해 익명화된 접속 통계(접속 키워드, 시간대)를
-          수집할 수 있으며, IP 주소는 익명화하여 저장합니다.
+          서비스 개선을 위해 다음의 익명화된 데이터를 수집합니다:
+        </p>
+        <ul className="list-disc pl-6 space-y-1">
+          <li>페이지 방문 기록 (방문한 페이지 경로, 시각)</li>
+          <li>검색 쿼리 (검색창에 입력한 키워드 원문, 시각)</li>
+          <li>리다이렉트 횟수 (키워드별 접속 빈도, 시각)</li>
+        </ul>
+        <p className="mt-2">
+          IP 주소, 브라우저 정보, 쿠키 등 개인 식별 정보(PII)는 수집하지
+          않습니다. 수집된 데이터는 Cloudflare D1에 저장되며, 키워드와
+          UTC 타임스탬프만 포함합니다.
         </p>
 
         <h2 className="text-xl font-semibold mt-6">3. 쿠키</h2>

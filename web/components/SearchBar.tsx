@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { searchKeywords } from "@/lib/hangul";
+import { track } from "@/lib/track";
 
 export function SearchBar({ keywords }: { keywords: string[] }) {
   const [query, setQuery] = useState("");
@@ -21,10 +22,11 @@ export function SearchBar({ keywords }: { keywords: string[] }) {
   }, [query, keywords]);
 
   const handleSelect = useCallback((keyword: string) => {
+    track("search", keyword, query);
     if (/^[가-힣ㄱ-ㅎa-zA-Z0-9]+$/.test(keyword)) {
       window.location.href = `https://${keyword}.가격.kr`;
     }
-  }, []);
+  }, [query]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!showSuggestions || suggestions.length === 0) return;
