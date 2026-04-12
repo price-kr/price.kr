@@ -372,12 +372,33 @@ jobs:
               ref: 'heads/main'
             });
 
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/heads/${branch}`,
-              sha: mainRef.data.object.sha
-            });
+            try {
+              await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`
+              });
+              // Update existing ref to point to main's current SHA
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`,
+                sha: mainRef.data.object.sha,
+                force: true
+              });
+            } catch (e) {
+              if (e.status === 404) {
+                // Create new ref
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `refs/heads/${branch}`,
+                  sha: mainRef.data.object.sha
+                });
+              } else {
+                throw e;
+              }
+            }
 
             // Create or update file (pass sha for updates to avoid 409 conflict)
             const fileParams = {
@@ -393,21 +414,44 @@ jobs:
             }
             await github.rest.repos.createOrUpdateFileContents(fileParams);
 
-            // Create PR
-            const pr = await github.rest.pulls.create({
+            // Check for existing PR
+            const { data: existingPRs } = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: isChangeRequest ? `[키워드 변경] ${keyword}` : `[키워드 등록] ${keyword}`,
-              head: branch,
-              base: 'main',
-              body: `## 키워드 등록 제안\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** #${issueNumber}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\n찬성이 3개 이상이면 자동 병합됩니다.`
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
             });
+
+            let pr;
+            const prTitle = isChangeRequest ? `[키워드 변경] ${keyword}` : `[키워드 등록] ${keyword}`;
+            const prBody = `## 키워드 등록 제안\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** #${issueNumber}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\n찬성이 3개 이상이면 자동 병합됩니다.`;
+
+            if (existingPRs.length > 0) {
+              pr = await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: existingPRs[0].number,
+                title: prTitle,
+                body: prBody
+              });
+            } else {
+              pr = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: prTitle,
+                head: branch,
+                base: 'main',
+                body: prBody
+              });
+            }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
+              body: existingPRs.length > 0
+                ? `✅ 유효성 검증 통과! PR이 업데이트되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
+                : `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
             });
 
             // Re-open issue only after PR is successfully created
