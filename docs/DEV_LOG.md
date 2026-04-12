@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-04-12 19:50 — `validate-issue` workflow improvement (manual rerun & auto-reopen)
+
+**작업 내용:**
+- Task 1: `validate-issue.yml` 트리거 확장 (`workflow_dispatch`, `labeled`).
+- Task 2: "Resolve context" 스텝 추가 — 이벤트 타입에 따른 이슈 번호/본문/라벨 통합 해소.
+- Task 3: 자동 재오픈 로직 구현 — 검증 성공 시 닫혀있던 이슈를 다시 오픈하고 안내 댓글 추가.
+- Task 4: 모든 스텝에서 `context.issue.number` 대신 해소된 `issueNumber` 사용하도록 업데이트.
+- 보안/안정성: 모든 스텝에서 `env:` 블록을 통해 데이터를 전달하여 스크립트 인젝션 및 구문 오류 방지.
+
+**기술적 결정:**
+
+### 1. `env:` 블록을 통한 데이터 전달 강제
+- **결정:** 모든 `actions/github-script` 내에서 `${{ }}` 직접 사용을 지양하고 `process.env` 사용.
+- **이유:** 이전 로그(2026-03-17 14:00)에서도 언급되었듯, 이슈 본문 등 사용자 입력을 JS 코드에 직접 삽입하면 따옴표나 백틱 하나로도 구문 오류가 나거나 악성 코드 실행이 가능함. `workflow_dispatch`로 입력받는 이슈 번호도 문자열이므로 `parseInt`와 함께 `env` 전달이 안전함.
+
+### 2. `workflow_dispatch` 시 `context.issue` 미존재 대응
+- **결정:** `let issueNumber = context.issue?.number;`와 같이 옵셔널 체이닝 사용 및 `workflow_dispatch`일 경우 API로 직접 조회.
+- **이유:** `workflow_dispatch` 이벤트 컨텍스트에는 `issue` 객체가 포함되지 않으므로, 기존 코드처럼 `context.issue.number`에 의존하면 런타임 에러 발생.
+
+**검증 결과:** `actionlint` 통과. 실제 동작은 리포지토리 배포 후 테스트 필요.
+
+---
+
 ## 2026-04-12 ~14:00 — auto-merge.yml GitHub Actions 비용 최적화
 
 **작업 내용:**
@@ -14,8 +37,7 @@ auto-merge.yml 워크플로우의 실행 횟수와 실행 시간을 줄여 GitHu
 
 **변경 사항:**
 1. `actions/checkout` 스텝 제거 — 스크립트가 GitHub API(`actions/github-script`)만 사용하고 로컬 파일을 참조하지 않으므로 repo clone 불필요. 실행당 ~20-30초 절약.
-2. cron 주기 `0 */6 * * *` → `0 9 * * *` 변경 — 비-admin PR은 24시간 대기 필수이므로 하루 4회 폴링은 과도. 하루 1회(UTC 09시)로 충분.
-3. `pull_request_target: types: [labeled]` 트리거 추가 — admin-approved 라벨 부착 시점에 즉시 머지 실행. 스케줄 폴링 대기 제거.
+2. `pull_request_target: types: [labeled]` 트리거 추가 — admin-approved 라벨 부착 시점에 즉시 머지 실행. 스케줄 폴링 대기 제거.
 
 **기술적 결정:**
 
@@ -28,9 +50,7 @@ auto-merge.yml 워크플로우의 실행 횟수와 실행 시간을 줄여 GitHu
 - **이유:** 라벨 이벤트에서 전체 PR을 순회할 필요 없음. API 호출 최소화 및 실행 시간 단축.
 
 **예상 효과:**
-- 실행 횟수: ~120회/월 → ~30회/월 (75% 감소)
 - 실행당 시간: ~1분 → ~30초 (checkout 제거)
-- 월간 billing: ~49분 → ~10분 이하
 - admin-approved 머지 지연: 최대 6시간 → 즉시
 
 ---

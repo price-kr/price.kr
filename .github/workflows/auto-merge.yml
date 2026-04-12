@@ -2,7 +2,7 @@ name: Check Votes and Auto-Merge
 
 on:
   schedule:
-    - cron: "0 9 * * *" # Daily at 09:00 UTC — vote-based merge check
+    - cron: "0 */6 * * *" # Every 6 hours
   pull_request_target:
     types: [labeled] # Instant merge on admin-approved label
   workflow_dispatch:
