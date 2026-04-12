@@ -2,7 +2,7 @@ name: Validate Keyword Issue
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [labeled]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -14,14 +14,6 @@ jobs:
   validate:
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'issues' &&
-        github.event.action == 'opened' &&
-        (
-          contains(github.event.issue.labels.*.name, 'keyword-proposal') ||
-          contains(github.event.issue.labels.*.name, 'keyword-change')
-        )
-      ) ||
       (
         github.event_name == 'issues' &&
         github.event.action == 'labeled' &&
