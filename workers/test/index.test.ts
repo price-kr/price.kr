@@ -183,3 +183,88 @@ describe("Worker redirect handler", () => {
     expect(res.headers.get("Location")).toBe("https://example.com/iphone");
   });
 });
+
+describe("Tracking endpoint /e", () => {
+  it("handles POST /e on t subdomain", async () => {
+    const env = createEnv();
+    const req = new Request("https://t.xn--o39aom.kr/e", {
+      method: "POST",
+      body: JSON.stringify({ type: "pageview", keyword: "/" }),
+      headers: {
+        Host: "t.xn--o39aom.kr",
+        Origin: "https://xn--o39aom.kr",
+      },
+    });
+    const res = await worker.fetch(req, env, createCtx());
+    expect(res.status).toBe(204);
+  });
+
+  it("handles OPTIONS /e on t subdomain (CORS preflight)", async () => {
+    const env = createEnv();
+    const req = new Request("https://t.xn--o39aom.kr/e", {
+      method: "OPTIONS",
+      headers: { Host: "t.xn--o39aom.kr" },
+    });
+    const res = await worker.fetch(req, env, createCtx());
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://xn--o39aom.kr");
+  });
+
+  it("does NOT treat /e on other subdomains as tracking", async () => {
+    const env = createEnv();
+    const req = new Request("https://xn--hu1b07h.xn--o39aom.kr/e", {
+      method: "POST",
+      body: JSON.stringify({ type: "pageview", keyword: "/" }),
+      headers: {
+        Host: "xn--hu1b07h.xn--o39aom.kr",
+        Origin: "https://xn--o39aom.kr",
+      },
+    });
+    const res = await worker.fetch(req, env, createCtx());
+    expect(res.status).not.toBe(204);
+  });
+});
+
+describe("Redirect tracking sampling", () => {
+  it("records redirect event when Math.random < 0.1", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.05);
+    const targetUrl = "https://search.shopping.naver.com/search?query=%EB%A7%8C%EB%91%90";
+    const env = createEnv({ "만두": targetUrl });
+    const ctx = createCtx();
+    const req = createRequest(
+      "https://xn--hu1b07h.xn--o39aom.kr/",
+      "xn--hu1b07h.xn--o39aom.kr"
+    );
+    await worker.fetch(req, env, ctx);
+    expect(ctx.waitUntil).toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("skips redirect event when Math.random >= 0.1", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const targetUrl = "https://search.shopping.naver.com/search?query=%EB%A7%8C%EB%91%90";
+    const env = createEnv({ "만두": targetUrl });
+    const ctx = createCtx();
+    const req = createRequest(
+      "https://xn--hu1b07h.xn--o39aom.kr/",
+      "xn--hu1b07h.xn--o39aom.kr"
+    );
+    await worker.fetch(req, env, ctx);
+    const waitUntilCalls = (ctx.waitUntil as ReturnType<typeof vi.fn>).mock.calls;
+    expect(waitUntilCalls.length).toBe(1); // only cache.put
+    vi.restoreAllMocks();
+  });
+
+  it("does NOT track redirect for subdomain 't'", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.05);
+    const env = createEnv();
+    const ctx = createCtx();
+    const req = createRequest(
+      "https://t.xn--o39aom.kr/",
+      "t.xn--o39aom.kr"
+    );
+    await worker.fetch(req, env, ctx);
+    expect(env.TRACKING.prepare).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+});

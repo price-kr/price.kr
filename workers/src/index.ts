@@ -1,5 +1,6 @@
 import { extractSubdomain } from "./subdomain";
 import { fetchFallback } from "./fallback";
+import { handleTrack, writeEvent, corsHeaders } from "./tracking";
 
 export interface Env {
   KEYWORDS: KVNamespace;
@@ -58,17 +59,61 @@ function errorPage(webAppOrigin: string): Response {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    // @ts-ignore - Cloudflare Workers runtime provides `caches` globally, but TypeScript doesn't know about it
+    const url = new URL(request.url);
+    const host = request.headers.get("Host") ?? url.hostname;
+    const subdomain = extractSubdomain(host, env.MAIN_DOMAIN);
+
+    // --- Tracking endpoint: only on subdomain 't', path '/e' ---
+    if (subdomain === "t" && url.pathname === "/e") {
+      if (request.method === "POST") {
+        return handleTrack(request, env);
+      }
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: corsHeaders(env.WEB_APP_ORIGIN),
+        });
+      }
+    }
+
+    // --- Existing redirect logic with cache ---
+    // @ts-ignore - Cloudflare Workers runtime provides `caches` globally
     const cache = caches.default;
     const cacheUrl = new URL(request.url);
     cacheUrl.search = "";
     cacheUrl.hash = "";
     const cacheKey = cacheUrl.toString();
+
     let response = await cache.match(cacheKey);
-    if (!response) {
-      response = await this._fetch_keyword(request, env);
-      ctx.waitUntil(cache.put(cacheKey, response.clone()).catch(() => {/* noop: non cacheable will failed it here. */}));
+    if (response) {
+      // Cache hit — track redirect if it's an actual 302 (10% sampling, exclude 't')
+      if (subdomain && subdomain !== "t" && response.status === 302 && Math.random() < 0.1) {
+        const keyword = subdomain.toLowerCase();
+        ctx.waitUntil(
+          writeEvent(env.TRACKING, "redirect", keyword).catch((e) =>
+            console.error("Tracking write failed:", e)
+          )
+        );
+      }
+      return response;
     }
+
+    response = await this._fetch_keyword(request, env);
+
+    // Track redirect on cache miss (10% sampling, exclude 't')
+    if (subdomain && subdomain !== "t" && response.status === 302 && Math.random() < 0.1) {
+      const keyword = subdomain.toLowerCase();
+      ctx.waitUntil(
+        writeEvent(env.TRACKING, "redirect", keyword).catch((e) =>
+          console.error("Tracking write failed:", e)
+        )
+      );
+    }
+
+    ctx.waitUntil(
+      cache.put(cacheKey, response.clone()).catch(() => {/* noop */})
+    );
+
     return response;
   },
 
