@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `.github/workflows/validate-issue.yml:1-12`
 
-- [ ] **Step 1: Update triggers to include `labeled` and `workflow_dispatch`**
+- [x] **Step 1: Update triggers to include `labeled` and `workflow_dispatch`**
 
 ```yaml
 name: Validate Keyword Issue
@@ -31,7 +31,7 @@ on:
         type: string
 ```
 
-- [ ] **Step 2: Update job-level `if` to handle all triggers**
+- [x] **Step 2: Update job-level `if` to handle all triggers**
 
 ```yaml
 jobs:
@@ -49,7 +49,7 @@ jobs:
 **Files:**
 - Modify: `.github/workflows/validate-issue.yml` (insert new step before "Parse issue body")
 
-- [ ] **Step 1: Add "Resolve context" step**
+- [x] **Step 1: Add "Resolve context" step**
 
 ```yaml
       - name: Resolve context
@@ -77,7 +77,7 @@ jobs:
             core.setOutput('labels', JSON.stringify(labels));
 ```
 
-- [ ] **Step 2: Update "Parse issue body" to use resolved context**
+- [x] **Step 2: Update "Parse issue body" to use resolved context**
 
 ```yaml
       - name: Parse issue body
@@ -98,7 +98,7 @@ jobs:
 **Files:**
 - Modify: `.github/workflows/validate-issue.yml` (update "Create PR" step)
 
-- [ ] **Step 1: Add re-open logic before creating PR**
+- [x] **Step 1: Add re-open logic before creating PR**
 
 ```javascript
             // Inside actions/github-script in Create PR step
@@ -125,17 +125,17 @@ jobs:
             }
 ```
 
-- [ ] **Step 2: Update all steps to use `steps.context.outputs.issue_number`**
+- [x] **Step 2: Update all steps to use `steps.context.outputs.issue_number`**
 
 ---
 
 ### Task 4: Final Validation and Commit
 
-- [ ] **Step 1: Verify YAML syntax**
+- [x] **Step 1: Verify YAML syntax**
 
 Run: `actionlint .github/workflows/validate-issue.yml` (if available)
 
-- [ ] **Step 2: Commit all changes**
+- [x] **Step 2: Commit all changes**
 
 ```bash
 git add .github/workflows/validate-issue.yml
