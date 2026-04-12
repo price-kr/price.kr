@@ -3,7 +3,11 @@ name: Sync Keywords to Cloudflare KV
 on:
   push:
     branches: [main]
-    paths: ["data/**"]
+    paths:
+      - "data/**"
+      - "!data/whitelist.json"
+      - "!data/blocklist.json"
+      - "!data/profanity-blocklist.json"
   workflow_dispatch:
 
 jobs:
