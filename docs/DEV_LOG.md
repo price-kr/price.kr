@@ -4,6 +4,37 @@
 
 ---
 
+## 2026-04-12 ~14:00 — auto-merge.yml GitHub Actions 비용 최적화
+
+**작업 내용:**
+auto-merge.yml 워크플로우의 실행 횟수와 실행 시간을 줄여 GitHub Actions billing을 절감.
+
+**변경 파일:**
+- `.github/workflows/auto-merge.yml`
+
+**변경 사항:**
+1. `actions/checkout` 스텝 제거 — 스크립트가 GitHub API(`actions/github-script`)만 사용하고 로컬 파일을 참조하지 않으므로 repo clone 불필요. 실행당 ~20-30초 절약.
+2. cron 주기 `0 */6 * * *` → `0 9 * * *` 변경 — 비-admin PR은 24시간 대기 필수이므로 하루 4회 폴링은 과도. 하루 1회(UTC 09시)로 충분.
+3. `pull_request_target: types: [labeled]` 트리거 추가 — admin-approved 라벨 부착 시점에 즉시 머지 실행. 스케줄 폴링 대기 제거.
+
+**기술적 결정:**
+
+### 1. pull_request_target + job-level `if` 가드
+- **결정:** `pull_request_target` 이벤트에 job-level `if` 조건으로 `admin-approved` 라벨만 필터링
+- **이유:** `pull_request_target`의 `types: [labeled]`는 모든 라벨에 발동. job 레벨에서 `github.event.label.name == 'admin-approved'`로 불필요한 실행 차단.
+
+### 2. 이벤트별 PR 범위 분리
+- **결정:** `pull_request_target` 이벤트일 때 `context.payload.pull_request` 단건만, schedule/manual일 때 전체 open PR 목록 조회
+- **이유:** 라벨 이벤트에서 전체 PR을 순회할 필요 없음. API 호출 최소화 및 실행 시간 단축.
+
+**예상 효과:**
+- 실행 횟수: ~120회/월 → ~30회/월 (75% 감소)
+- 실행당 시간: ~1분 → ~30초 (checkout 제거)
+- 월간 billing: ~49분 → ~10분 이하
+- admin-approved 머지 지연: 최대 6시간 → 즉시
+
+---
+
 ## 2026-04-10 ~15:00 — 오픈소스 공개 준비 (접근법 B: 커뮤니티 중심)
 
 **작업 내용:**
