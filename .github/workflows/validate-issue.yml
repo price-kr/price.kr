@@ -416,7 +416,9 @@ jobs:
 
             let pr;
             const prTitle = isChangeRequest ? `[키워드 변경] ${keyword}` : `[키워드 등록] ${keyword}`;
-            const prBody = `## 키워드 등록 제안\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** #${issueNumber}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\n찬성이 3개 이상이면 자동 병합됩니다.`;
+            const prHeading = isChangeRequest ? '키워드 변경 제안' : '키워드 등록 제안';
+            const voteThreshold = isChangeRequest ? 5 : 3;
+            const prBody = `## ${prHeading}\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** #${issueNumber}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\n찬성이 ${voteThreshold}개 이상이면 자동 병합됩니다.`;
 
             if (existingPRs.length > 0) {
               pr = await github.rest.pulls.update({
@@ -442,8 +444,8 @@ jobs:
               repo: context.repo.repo,
               issue_number: issueNumber,
               body: existingPRs.length > 0
-                ? `✅ 유효성 검증 통과! PR이 업데이트되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
-                : `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
+                ? `✅ 유효성 검증 통과! PR이 업데이트되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 ${voteThreshold}개 이상 시 자동 병합됩니다.`
+                : `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 ${voteThreshold}개 이상 시 자동 병합됩니다.`
             });
 
             // Re-open issue only after PR is successfully created
