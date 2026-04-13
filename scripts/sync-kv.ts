@@ -1,5 +1,5 @@
 import { readdir, readFile } from "fs/promises";
-import { join } from "path";
+import { join, basename } from "path";
 
 export interface KvEntry {
   key: string;
@@ -11,6 +11,38 @@ const NON_KEYWORD_FILES = new Set([
   "whitelist.json",
   "profanity-blocklist.json",
 ]);
+
+export interface DiffEntry {
+  status: "A" | "M" | "D" | "R";
+  file: string;
+  oldFile?: string;
+}
+
+export function parseGitDiffNameStatus(output: string): DiffEntry[] {
+  const entries: DiffEntry[] = [];
+  for (const line of output.split("\n")) {
+    if (!line.trim()) continue;
+    const parts = line.split("\t");
+    const statusRaw = parts[0];
+
+    const status = statusRaw.startsWith("R") ? "R" : statusRaw as "A" | "M" | "D";
+    if (!["A", "M", "D", "R"].includes(status)) continue;
+
+    if (status === "R") {
+      const oldFile = parts[1];
+      const newFile = parts[2];
+      if (!newFile?.startsWith("data/") || !newFile.endsWith(".json")) continue;
+      if (NON_KEYWORD_FILES.has(basename(newFile))) continue;
+      entries.push({ status: "R", file: newFile, oldFile });
+    } else {
+      const file = parts[1];
+      if (!file?.startsWith("data/") || !file.endsWith(".json")) continue;
+      if (NON_KEYWORD_FILES.has(basename(file))) continue;
+      entries.push({ status, file });
+    }
+  }
+  return entries;
+}
 
 async function findJsonFiles(dir: string): Promise<string[]> {
   const results: string[] = [];

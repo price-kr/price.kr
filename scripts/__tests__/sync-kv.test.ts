@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { buildKvEntries } from "../sync-kv.js";
+import { buildKvEntries, parseGitDiffNameStatus } from "../sync-kv.js";
 import { writeFileSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -71,3 +71,66 @@ describe("buildKvEntries", () => {
     expect(entries[0]).toEqual({ key: "valid", value: "https://example.com" });
   });
 });
+
+describe("parseGitDiffNameStatus", () => {
+  it("parses added files", () => {
+    const input = "A\tdata/ㅁ/만/만두.json\n";
+    expect(parseGitDiffNameStatus(input)).toEqual([
+      { status: "A", file: "data/ㅁ/만/만두.json" },
+    ]);
+  });
+
+  it("parses modified files", () => {
+    const input = "M\tdata/_en/iphone.json\n";
+    expect(parseGitDiffNameStatus(input)).toEqual([
+      { status: "M", file: "data/_en/iphone.json" },
+    ]);
+  });
+
+  it("parses deleted files", () => {
+    const input = "D\tdata/ㄱ/가/가방.json\n";
+    expect(parseGitDiffNameStatus(input)).toEqual([
+      { status: "D", file: "data/ㄱ/가/가방.json" },
+    ]);
+  });
+
+  it("parses renamed files with similarity index", () => {
+    const input = "R100\tdata/ㅁ/만/만두.json\tdata/ㅁ/만/만둣국.json\n";
+    expect(parseGitDiffNameStatus(input)).toEqual([
+      { status: "R", oldFile: "data/ㅁ/만/만두.json", file: "data/ㅁ/만/만둣국.json" },
+    ]);
+  });
+
+  it("filters to data/**/*.json only and excludes non-keyword files", () => {
+    const input = [
+      "A\tdata/ㅁ/만/만두.json",
+      "M\tscripts/sync-kv.ts",
+      "A\tdata/blocklist.json",
+      "A\tdata/whitelist.json",
+      "A\tdata/profanity-blocklist.json",
+      "D\tREADME.md",
+    ].join("\n");
+    expect(parseGitDiffNameStatus(input)).toEqual([
+      { status: "A", file: "data/ㅁ/만/만두.json" },
+    ]);
+  });
+
+  it("handles empty input", () => {
+    expect(parseGitDiffNameStatus("")).toEqual([]);
+    expect(parseGitDiffNameStatus("\n")).toEqual([]);
+  });
+
+  it("handles multiple changes", () => {
+    const input = [
+      "A\tdata/ㅁ/만/만두.json",
+      "M\tdata/_en/iphone.json",
+      "D\tdata/ㄱ/가/가방.json",
+    ].join("\n");
+    const result = parseGitDiffNameStatus(input);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toEqual({ status: "A", file: "data/ㅁ/만/만두.json" });
+    expect(result[1]).toEqual({ status: "M", file: "data/_en/iphone.json" });
+    expect(result[2]).toEqual({ status: "D", file: "data/ㄱ/가/가방.json" });
+  });
+});
+
