@@ -4,6 +4,38 @@
 
 ---
 
+## 2026-04-13 — Incremental KV Sync (commit-based diff)
+
+**작업 내용:**
+Full sync를 대체하는 증분 KV 동기화 구현. 매 push에서 변경된 키워드만 동기화하여 Cloudflare KV free tier(1K writes/day) 내에서 안정적 운영.
+
+**변경 파일:**
+- `scripts/sync-kv.ts` — `incrementalKvEntries()`, `parseGitDiffNameStatus()`, `chunk()`, `writeDiffJsonl()`, wrangler helpers, CLI mode routing 추가
+- `scripts/__tests__/sync-kv.test.ts` — diff parsing, incremental 분류, chunking, dry-run 테스트 추가
+- `.github/workflows/sync-kv.yml` — 4-step 쉘 스크립트를 단일 TypeScript 호출로 교체
+
+**기술적 결정:**
+
+### 1. KV 내부에 sync commit SHA 저장
+- **결정:** `__sync_commit__` 키로 KV에 직접 저장
+- **이유:** 외부 상태 저장소(파일, GitHub Actions cache 등) 불필요. KV 자체가 single source of truth
+- **안전성:** `__sync_commit__`은 키워드 검증 regex 통과 불가 → Workers에서 조회 불가
+
+### 2. `git diff --name-status` 사용 (v1의 `--name-only` 대신)
+- **결정:** A/M/D/R 상태 구분으로 rename을 별도 처리
+- **이유:** rename 시 old keyword delete + new keyword upsert 필요. `--name-only`로는 구분 불가
+
+### 3. 삭제 키워드 추출에 `git show` 사용
+- **결정:** 파일명 파싱 대신 `git show $COMMIT:$FILE`로 JSON의 keyword 필드 추출
+- **이유:** 영어 키워드는 소문자 변환되어 파일명과 keyword가 일치하지 않을 수 있음
+
+### 4. fetch-depth: 0으로 변경
+- **결정:** workflow의 `fetch-depth: 2` → `0` (full history)
+- **이유:** `__sync_commit__`이 임의의 과거 커밋일 수 있어 shallow clone으로는 diff 불가
+- **트레이드오프:** checkout 시간 약간 증가하지만 `filter: blob:none`으로 blob 제외하여 최소화
+
+---
+
 ## 2026-04-12 19:50 — `validate-issue` workflow improvement (manual rerun & auto-reopen)
 
 **작업 내용:**
