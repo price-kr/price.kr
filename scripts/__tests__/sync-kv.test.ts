@@ -1,8 +1,18 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { buildKvEntries, parseGitDiffNameStatus, chunk } from "../sync-kv.js";
-import { writeFileSync, mkdirSync, rmSync } from "fs";
+import {
+  buildKvEntries,
+  parseGitDiffNameStatus,
+  chunk,
+  incrementalKvEntries,
+  writeDiffJsonl,
+  readSyncCommit,
+  buildBulkPutArgs,
+  buildBulkDeleteArgs,
+} from "../sync-kv.js";
+import { writeFileSync, mkdirSync, rmSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { execFileSync } from "child_process";
 
 const tmpDirs: string[] = [];
 
@@ -18,6 +28,32 @@ afterEach(() => {
   }
   tmpDirs.length = 0;
 });
+
+const GIT = "/usr/bin/git";
+
+function git(args: string[], cwd: string, encoding?: "utf-8"): string {
+  return execFileSync(GIT, args, { cwd, encoding: encoding || "utf-8" }).toString().trim();
+}
+
+function createTempGitRepo(files: Record<string, object>): { dir: string; commitSha: string } {
+  const tmp = createTmpDir();
+  mkdirSync(tmp, { recursive: true });
+  git(["init"], tmp);
+  git(["config", "user.email", "test@test.com"], tmp);
+  git(["config", "user.name", "Test"], tmp);
+  git(["config", "core.quotepath", "false"], tmp);
+
+  for (const [path, content] of Object.entries(files)) {
+    const fullPath = join(tmp, path);
+    mkdirSync(join(fullPath, ".."), { recursive: true });
+    writeFileSync(fullPath, JSON.stringify(content));
+  }
+
+  git(["add", "."], tmp);
+  git(["commit", "-m", "initial", "--allow-empty"], tmp);
+  const sha = git(["rev-parse", "HEAD"], tmp);
+  return { dir: tmp, commitSha: sha };
+}
 
 describe("buildKvEntries", () => {
   it("reads JSON files and returns KV key-value pairs", async () => {
@@ -152,3 +188,144 @@ describe("chunk", () => {
   });
 });
 
+describe("incrementalKvEntries", () => {
+  it("classifies added files as upserts", async () => {
+    const { dir, commitSha } = createTempGitRepo({});
+    const filePath = join(dir, "data/ㅁ/만/만두.json");
+    mkdirSync(join(filePath, ".."), { recursive: true });
+    writeFileSync(filePath, JSON.stringify({ keyword: "만두", url: "https://example.com/mandu", created: "2026-01-01" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "add mandu"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([{ key: "만두", value: "https://example.com/mandu" }]);
+    expect(result.delete).toEqual([]);
+  });
+
+  it("classifies modified files as upserts with new value", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/iphone.json": { keyword: "iphone", url: "https://old.com", created: "2026-01-01" },
+    });
+    writeFileSync(join(dir, "data/_en/iphone.json"), JSON.stringify({ keyword: "iphone", url: "https://new.com", created: "2026-01-01" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "update iphone"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([{ key: "iphone", value: "https://new.com" }]);
+    expect(result.delete).toEqual([]);
+  });
+
+  it("classifies deleted files using git show for keyword extraction", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/ㄱ/가/가방.json": { keyword: "가방", url: "https://example.com/bag", created: "2026-01-01" },
+    });
+    const { unlinkSync } = await import("fs");
+    unlinkSync(join(dir, "data/ㄱ/가/가방.json"));
+    git(["add", "."], dir);
+    git(["commit", "-m", "delete gabang"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete).toEqual(["가방"]);
+  });
+
+  it("handles renames as delete-old + upsert-new", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/ㅁ/만/만두.json": { keyword: "만두", url: "https://example.com/mandu", created: "2026-01-01" },
+    });
+    const { renameSync } = await import("fs");
+    renameSync(join(dir, "data/ㅁ/만/만두.json"), join(dir, "data/ㅁ/만/만둣국.json"));
+    writeFileSync(join(dir, "data/ㅁ/만/만둣국.json"), JSON.stringify({ keyword: "만둣국", url: "https://example.com/manduguk", created: "2026-01-01" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "rename mandu to manduguk"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([{ key: "만둣국", value: "https://example.com/manduguk" }]);
+    expect(result.delete).toEqual(["만두"]);
+  });
+
+  it("returns empty arrays when no data files changed", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "README.md": { note: "not a keyword" },
+    });
+    writeFileSync(join(dir, "README.md"), "updated");
+    git(["add", "."], dir);
+    git(["commit", "-m", "update readme"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete).toEqual([]);
+  });
+
+  it("skips files with missing keyword or url fields", async () => {
+    const { dir, commitSha } = createTempGitRepo({});
+    const filePath = join(dir, "data/_en/bad.json");
+    mkdirSync(join(filePath, ".."), { recursive: true });
+    writeFileSync(filePath, JSON.stringify({ keyword: "bad" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "add bad"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete).toEqual([]);
+  });
+});
+
+describe("writeDiffJsonl", () => {
+  it("writes put and delete actions as JSONL", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(tmp, { recursive: true });
+    const outputPath = join(tmp, "diff.jsonl");
+
+    const upsert = [
+      { key: "만두", value: "https://example.com/mandu" },
+      { key: "iphone", value: "https://example.com/iphone" },
+    ];
+    const deleteKeys = ["가방"];
+
+    await writeDiffJsonl(outputPath, upsert, deleteKeys);
+
+    const lines = readFileSync(outputPath, "utf-8").trim().split("\n").map(l => JSON.parse(l));
+    expect(lines).toEqual([
+      { action: "put", key: "만두", value: "https://example.com/mandu" },
+      { action: "put", key: "iphone", value: "https://example.com/iphone" },
+      { action: "delete", key: "가방" },
+    ]);
+  });
+
+  it("writes empty file when no changes", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(tmp, { recursive: true });
+    const outputPath = join(tmp, "diff.jsonl");
+
+    await writeDiffJsonl(outputPath, [], []);
+
+    const content = readFileSync(outputPath, "utf-8");
+    expect(content).toBe("");
+  });
+});
+
+describe("wrangler helpers", () => {
+  const NAMESPACE_ID = "abc123def456";
+
+  it("readSyncCommit returns null when wrangler is unavailable", () => {
+    const result = readSyncCommit("nonexistent-namespace");
+    expect(result).toBeNull();
+  });
+
+  it("buildBulkPutArgs returns correct wrangler arguments", () => {
+    const args = buildBulkPutArgs(NAMESPACE_ID, "/tmp/test.json");
+    expect(args).toEqual([
+      "wrangler", "kv", "bulk", "put",
+      "--remote", `--namespace-id=${NAMESPACE_ID}`, "/tmp/test.json",
+    ]);
+  });
+
+  it("buildBulkDeleteArgs returns correct wrangler arguments", () => {
+    const args = buildBulkDeleteArgs(NAMESPACE_ID, "/tmp/test.json");
+    expect(args).toEqual([
+      "wrangler", "kv", "bulk", "delete",
+      "--remote", `--namespace-id=${NAMESPACE_ID}`, "/tmp/test.json",
+    ]);
+  });
+});
