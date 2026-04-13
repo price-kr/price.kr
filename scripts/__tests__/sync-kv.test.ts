@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { buildKvEntries, parseGitDiffNameStatus } from "../sync-kv.js";
+import { buildKvEntries, parseGitDiffNameStatus, chunk } from "../sync-kv.js";
 import { writeFileSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -131,6 +131,24 @@ describe("parseGitDiffNameStatus", () => {
     expect(result[0]).toEqual({ status: "A", file: "data/ㅁ/만/만두.json" });
     expect(result[1]).toEqual({ status: "M", file: "data/_en/iphone.json" });
     expect(result[2]).toEqual({ status: "D", file: "data/ㄱ/가/가방.json" });
+  });
+});
+
+describe("chunk", () => {
+  it("returns single chunk when array is smaller than limit", () => {
+    expect(chunk([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
+  });
+
+  it("splits array into equal chunks", () => {
+    expect(chunk([1, 2, 3, 4], 2)).toEqual([[1, 2], [3, 4]]);
+  });
+
+  it("handles remainder in last chunk", () => {
+    expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it("returns empty array for empty input", () => {
+    expect(chunk([], 10)).toEqual([]);
   });
 });
 

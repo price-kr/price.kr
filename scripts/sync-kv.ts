@@ -44,6 +44,15 @@ export function parseGitDiffNameStatus(output: string): DiffEntry[] {
   return entries;
 }
 
+export function chunk<T>(array: T[], size: number): T[][] {
+  if (array.length === 0) return [];
+  const result: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
+  }
+  return result;
+}
+
 async function findJsonFiles(dir: string): Promise<string[]> {
   const results: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
