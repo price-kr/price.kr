@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-04-13 ~16:00 — Incremental KV Sync workflow trigger filter fix
+
+**작업 내용:**
+증분 KV 동기화 재리뷰에서 발견된 workflow trigger 회귀 수정. `data/blocklist.json`, `data/whitelist.json`, `data/profanity-blocklist.json`만 변경된 push에서는 KV sync workflow가 실행되지 않도록 경로 제외 필터를 복원.
+
+**변경 파일:**
+- `.github/workflows/sync-kv.yml` — push trigger의 `paths` 제외 규칙 복원
+- `docs/DEV_PROGRESS.md` — Phase 5 비고에 workflow filter 복구 내용 반영
+
+**기술적 결정:**
+
+### 1. 비키워드 JSON은 workflow 레벨에서 차단
+- **결정:** `NON_KEYWORD_FILES`로 런타임에서 한 번 더 걸러지더라도, GitHub Actions `paths`에서 먼저 제외
+- **이유:** blocklist 계열 변경은 KV keyword sync 대상이 아니므로 워크플로우 자체를 실행하지 않는 편이 비용과 KV write quota 모두에 유리함
+- **검토한 대안:** 현재 TypeScript 필터만 유지 — 기능상 맞지만 no-op 실행에서도 Actions 시간과 `__sync_commit__` write가 낭비될 수 있어 비효율적
+
+---
+
 ## 2026-04-13 ~15:25 — Incremental KV Sync rename safety fix
 
 **작업 내용:**
