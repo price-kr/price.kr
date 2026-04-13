@@ -226,7 +226,7 @@ export function bulkPut(namespaceId: string, entries: KvEntry[]): void {
   for (const [i, batch] of chunks.entries()) {
     const tmpFile = `/tmp/kv-bulk-put-${Date.now()}-${i}.json`;
     writeFileSync(tmpFile, JSON.stringify(batch.map(e => ({ key: e.key, value: e.value }))));
-    execFileSync("npx", buildBulkPutArgs(namespaceId, tmpFile).slice(1), {
+    execFileSync("npx", buildBulkPutArgs(namespaceId, tmpFile), {
       stdio: "inherit",
       timeout: 120_000,
     });
@@ -239,7 +239,7 @@ export function bulkDelete(namespaceId: string, keys: string[]): void {
   for (const [i, batch] of chunks.entries()) {
     const tmpFile = `/tmp/kv-bulk-delete-${Date.now()}-${i}.json`;
     writeFileSync(tmpFile, JSON.stringify(batch));
-    execFileSync("npx", buildBulkDeleteArgs(namespaceId, tmpFile).slice(1), {
+    execFileSync("npx", buildBulkDeleteArgs(namespaceId, tmpFile), {
       stdio: "inherit",
       timeout: 120_000,
     });

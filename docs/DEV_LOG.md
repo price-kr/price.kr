@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-04-13 ~16:30 — Sync action wrangler install fix
+
+**작업 내용:**
+GitHub Actions에서 KV namespace 조회 시 "KV not found"로 실패하던 문제 수정. workflow가 `tsx` 기반 스크립트로 바뀐 뒤에도 로컬 설치 의존성을 가정하고 있었는데, 실제 runner에서는 `wrangler` CLI가 전역으로 준비되지 않아 KV 명령 실행이 실패할 수 있어 설치 스텝을 복원.
+
+**변경 파일:**
+- `.github/workflows/sync-kv.yml` — `npm ci` 대신 `npm install -g wrangler@4`로 wrangler CLI 보장
+- `docs/DEV_PROGRESS.md` — Phase 5 비고에 wrangler install 복원 내용 반영
+
+**기술적 결정:**
+
+### 1. sync workflow는 wrangler 가용성을 우선 보장
+- **결정:** sync action에서 `wrangler@4`를 명시적으로 전역 설치
+- **이유:** KV bulk put/delete와 sync commit read/write는 모두 wrangler CLI에 의존하므로, 가장 중요한 실행 의존성을 workflow에서 직접 보장하는 편이 안전함
+- **검토한 대안:** `npm ci`만 유지하고 `npx wrangler`에 전적으로 의존 — workspace/tooling 상태에 따라 실행 환경이 흔들릴 수 있어 운영 workflow에는 덜 명확함
+
+---
+
 ## 2026-04-13 ~16:00 — Incremental KV Sync workflow trigger filter fix
 
 **작업 내용:**
