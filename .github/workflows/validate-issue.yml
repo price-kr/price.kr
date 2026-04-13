@@ -2,11 +2,26 @@ name: Validate Keyword Issue
 
 on:
   issues:
-    types: [opened]
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to validate'
+        required: true
+        type: string
 
 jobs:
   validate:
-    if: contains(github.event.issue.labels.*.name, 'keyword-proposal') || contains(github.event.issue.labels.*.name, 'keyword-change')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issues' &&
+        github.event.action == 'labeled' &&
+        (
+          github.event.label.name == 'keyword-proposal' ||
+          github.event.label.name == 'keyword-change'
+        )
+      )
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -22,12 +37,44 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Parse issue body
-        id: parse
+      - name: Resolve context
+        id: context
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
-            const body = context.payload.issue.body || '';
+            let issueNumber = context.issue?.number;
+            let body = context.payload.issue?.body;
+            let labels = context.payload.issue?.labels?.map(l => l.name) || [];
+
+            if (context.eventName === 'workflow_dispatch') {
+              issueNumber = parseInt(context.payload.inputs.issue_number);
+              if (isNaN(issueNumber)) {
+                core.setFailed(`Invalid issue_number: ${context.payload.inputs.issue_number}`);
+                return;
+              }
+              const { data: issue } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+              body = issue.body;
+              labels = issue.labels.map(l => l.name);
+            }
+
+            core.setOutput('issue_number', issueNumber);
+            core.setOutput('body', body);
+            core.setOutput('labels', JSON.stringify(labels));
+
+      - name: Parse issue body
+        id: parse
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          BODY: ${{ steps.context.outputs.body }}
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
+        with:
+          script: |
+            const body = process.env.BODY || '';
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
 
             // Parse form fields
             const keywordMatch = body.match(/### (?:키워드|변경할 키워드)\s*\n\s*(.+)/);
@@ -37,13 +84,13 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: '❌ 키워드 또는 URL을 파싱할 수 없습니다. 양식을 확인해 주세요.'
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 state: 'closed'
               });
               return;
@@ -62,11 +109,13 @@ jobs:
         env:
           KEYWORD: ${{ steps.parse.outputs.keyword }}
           URL_INPUT: ${{ steps.parse.outputs.url }}
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
           GOOGLE_SAFE_BROWSING_API_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_API_KEY }}
         with:
           script: |
             const keyword = process.env.KEYWORD;
             const url = process.env.URL_INPUT;
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
             const fs = require('fs');
 
             // Validate keyword contains only allowed characters (Korean, English, digits)
@@ -74,13 +123,13 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: '❌ 키워드에 허용되지 않는 문자가 포함되어 있습니다. 한글, 영문, 숫자만 사용 가능합니다.'
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 state: 'closed'
               });
               return;
@@ -126,13 +175,13 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: '❌ 이 키워드는 등록이 제한되어 있습니다 (금지 키워드 목록).'
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 state: 'closed'
               });
               return;
@@ -145,13 +194,13 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: '❌ 유효하지 않은 URL 형식입니다.'
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 state: 'closed'
               });
               return;
@@ -165,7 +214,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: '❌ 내부 오류: 허용 도메인 목록을 로드할 수 없습니다. 관리자에게 문의해 주세요.'
               });
               core.setFailed('Failed to load whitelist.json');
@@ -179,7 +228,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: `⚠️ URL 도메인(${urlObj.hostname})이 허용 목록에 없습니다. 관리자 검토가 필요합니다.`
               });
               // Don't close — let admin review
@@ -211,13 +260,13 @@ jobs:
                   await github.rest.issues.createComment({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    issue_number: context.issue.number,
+                    issue_number: issueNumber,
                     body: '❌ URL이 Google Safe Browsing에서 위험한 것으로 감지되었습니다.'
                   });
                   await github.rest.issues.update({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
-                    issue_number: context.issue.number,
+                    issue_number: issueNumber,
                     state: 'closed'
                   });
                   return;
@@ -235,12 +284,24 @@ jobs:
         env:
           KEYWORD: ${{ steps.parse.outputs.keyword }}
           URL_INPUT: ${{ steps.parse.outputs.url }}
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
+          LABELS: ${{ steps.context.outputs.labels }}
         with:
           script: |
             const keyword = process.env.KEYWORD;
             const url = process.env.URL_INPUT;
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
+            const labels = JSON.parse(process.env.LABELS || '[]');
             const fs = require('fs');
             const path = require('path');
+
+            // Check issue state before proceeding — defer re-open until after PR creation
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            const shouldReopenIssue = issue.state === 'closed';
 
             // Compute file path
             const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
@@ -268,13 +329,13 @@ jobs:
               });
             } catch {}
 
-            const isChangeRequest = context.payload.issue.labels?.some(l => l.name === 'keyword-change');
+            const isChangeRequest = labels.includes('keyword-change');
 
             if (existingFile && !isChangeRequest) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: `⚠️ 키워드 "${keyword}"는 이미 등록되어 있습니다. URL을 변경하려면 "키워드 변경 요청" 양식을 사용해 주세요.`
               });
               return;
@@ -284,7 +345,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: `⚠️ 키워드 "${keyword}"는 아직 등록되지 않았습니다. "새 단어 제안하기" 양식을 사용해 주세요.`
               });
               return;
@@ -294,7 +355,7 @@ jobs:
             const normalizedKeyword = /^[a-zA-Z]/.test(keyword) ? keyword.toLowerCase() : keyword;
             const content = JSON.stringify({ keyword: normalizedKeyword, url, created: new Date().toISOString().split('T')[0] }, null, 2) + '\n';
             // Sanitize branch name: use issue number for safety
-            const branch = `keyword/issue-${context.issue.number}`;
+            const branch = `keyword/issue-${issueNumber}`;
 
             // Create branch from main
             const mainRef = await github.rest.git.getRef({
@@ -303,12 +364,33 @@ jobs:
               ref: 'heads/main'
             });
 
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/heads/${branch}`,
-              sha: mainRef.data.object.sha
-            });
+            try {
+              await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`
+              });
+              // Update existing ref to point to main's current SHA
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`,
+                sha: mainRef.data.object.sha,
+                force: true
+              });
+            } catch (e) {
+              if (e.status === 404) {
+                // Create new ref
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `refs/heads/${branch}`,
+                  sha: mainRef.data.object.sha
+                });
+              } else {
+                throw e;
+              }
+            }
 
             // Create or update file (pass sha for updates to avoid 409 conflict)
             const fileParams = {
@@ -324,19 +406,61 @@ jobs:
             }
             await github.rest.repos.createOrUpdateFileContents(fileParams);
 
-            // Create PR
-            const pr = await github.rest.pulls.create({
+            // Check for existing PR
+            const { data: existingPRs } = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: isChangeRequest ? `[키워드 변경] ${keyword}` : `[키워드 등록] ${keyword}`,
-              head: branch,
-              base: 'main',
-              body: `## 키워드 등록 제안\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** #${context.issue.number}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\n찬성이 3개 이상이면 자동 병합됩니다.`
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
             });
+
+            let pr;
+            const prTitle = isChangeRequest ? `[키워드 변경] ${keyword}` : `[키워드 등록] ${keyword}`;
+            const prHeading = isChangeRequest ? '키워드 변경 제안' : '키워드 등록 제안';
+            const voteThreshold = isChangeRequest ? 5 : 3;
+            const prBody = `## ${prHeading}\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** Fixes #${issueNumber}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\nPR 생성 후 24시간이 지난다음 찬성이 ${voteThreshold}개 이상이 만족되면 자동 병합됩니다.`;
+
+            if (existingPRs.length > 0) {
+              pr = await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: existingPRs[0].number,
+                title: prTitle,
+                body: prBody
+              });
+            } else {
+              pr = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: prTitle,
+                head: branch,
+                base: 'main',
+                body: prBody
+              });
+            }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 3개 이상 시 자동 병합됩니다.`
+              issue_number: issueNumber,
+              body: existingPRs.length > 0
+                ? `✅ 유효성 검증 통과! PR이 업데이트되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 ${voteThreshold}개 이상, PR 생성 후 24시간이 지나면 투표결과에 따라 자동 병합됩니다.`
+                : `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 ${voteThreshold}개 이상, PR 생성 후 24시간이 지나면 투표결과에 따라 자동 병합됩니다.`
             });
+
+            // Re-open issue only after PR is successfully created
+            if (shouldReopenIssue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'open'
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: '🔄 재검증 결과가 유효하여 이슈를 다시 오픈합니다.'
+              });
+            }
+
