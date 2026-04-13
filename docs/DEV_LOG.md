@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-04-13 ~15:25 — Incremental KV Sync rename safety fix
+
+**작업 내용:**
+증분 KV 동기화 리뷰 중 발견된 rename edge case 수정. 파일 rename/move 후 `keyword` 값이 동일한 경우, 같은 sync 배치에서 put 후 delete가 이어져 최종적으로 KV 키가 삭제될 수 있던 문제를 방지.
+
+**변경 파일:**
+- `scripts/sync-kv.ts` — upsert 대상 키와 겹치는 delete 키를 최종 결과에서 제거
+- `scripts/__tests__/sync-kv.test.ts` — same-key rename regression test 추가
+- `docs/DEV_PROGRESS.md` — Phase 5 상태를 완료로 갱신
+
+**기술적 결정:**
+
+### 1. delete 목록을 최종 정리 단계에서 필터링
+- **결정:** `incrementalKvEntries()` 마지막에 `upsert` 키 집합을 만들고, 같은 키가 `delete`에도 있으면 제거
+- **이유:** rename 처리뿐 아니라 동일 배치에서 "최종 상태가 존재하는 키"를 보존하는 쪽이 안전함. CLI가 put 후 delete 순서로 실행되더라도 결과가 현재 데이터 트리와 일치하도록 보장
+- **검토한 대안:** rename 분기 내부에서 old/new keyword 비교 후 조건부 delete — 동작은 가능하지만, 여러 변경 유형이 섞이는 배치 전체를 한 번에 정리하는 현재 방식이 더 견고함
+
+---
+
 ## 2026-04-13 — Incremental KV Sync (commit-based diff)
 
 **작업 내용:**

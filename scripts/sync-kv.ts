@@ -132,7 +132,10 @@ export async function incrementalKvEntries(
     }
   }
 
-  return { upsert, delete: deleteKeys };
+  const upsertKeys = new Set(upsert.map((entry) => entry.key));
+  const filteredDeleteKeys = [...new Set(deleteKeys.filter((key) => !upsertKeys.has(key)))];
+
+  return { upsert, delete: filteredDeleteKeys };
 }
 
 export async function writeDiffJsonl(

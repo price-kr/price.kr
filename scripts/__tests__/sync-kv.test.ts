@@ -244,6 +244,25 @@ describe("incrementalKvEntries", () => {
     expect(result.delete).toEqual(["만두"]);
   });
 
+  it("does not delete a key when a rename keeps the same keyword", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/same.json": { keyword: "same", url: "https://example.com/same", created: "2026-01-01" },
+    });
+    const { renameSync } = await import("fs");
+    mkdirSync(join(dir, "data/ㅅ/사"), { recursive: true });
+    renameSync(join(dir, "data/_en/same.json"), join(dir, "data/ㅅ/사/same.json"));
+    writeFileSync(
+      join(dir, "data/ㅅ/사/same.json"),
+      JSON.stringify({ keyword: "same", url: "https://example.com/same", created: "2026-01-01" })
+    );
+    git(["add", "."], dir);
+    git(["commit", "-m", "move same without keyword change"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([{ key: "same", value: "https://example.com/same" }]);
+    expect(result.delete).toEqual([]);
+  });
+
   it("returns empty arrays when no data files changed", async () => {
     const { dir, commitSha } = createTempGitRepo({
       "README.md": { note: "not a keyword" },
