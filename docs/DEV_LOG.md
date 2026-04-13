@@ -4,6 +4,75 @@
 
 ---
 
+## 2026-04-13 ~16:00 — Incremental KV Sync workflow trigger filter fix
+
+**작업 내용:**
+증분 KV 동기화 재리뷰에서 발견된 workflow trigger 회귀 수정. `data/blocklist.json`, `data/whitelist.json`, `data/profanity-blocklist.json`만 변경된 push에서는 KV sync workflow가 실행되지 않도록 경로 제외 필터를 복원.
+
+**변경 파일:**
+- `.github/workflows/sync-kv.yml` — push trigger의 `paths` 제외 규칙 복원
+- `docs/DEV_PROGRESS.md` — Phase 5 비고에 workflow filter 복구 내용 반영
+
+**기술적 결정:**
+
+### 1. 비키워드 JSON은 workflow 레벨에서 차단
+- **결정:** `NON_KEYWORD_FILES`로 런타임에서 한 번 더 걸러지더라도, GitHub Actions `paths`에서 먼저 제외
+- **이유:** blocklist 계열 변경은 KV keyword sync 대상이 아니므로 워크플로우 자체를 실행하지 않는 편이 비용과 KV write quota 모두에 유리함
+- **검토한 대안:** 현재 TypeScript 필터만 유지 — 기능상 맞지만 no-op 실행에서도 Actions 시간과 `__sync_commit__` write가 낭비될 수 있어 비효율적
+
+---
+
+## 2026-04-13 ~15:25 — Incremental KV Sync rename safety fix
+
+**작업 내용:**
+증분 KV 동기화 리뷰 중 발견된 rename edge case 수정. 파일 rename/move 후 `keyword` 값이 동일한 경우, 같은 sync 배치에서 put 후 delete가 이어져 최종적으로 KV 키가 삭제될 수 있던 문제를 방지.
+
+**변경 파일:**
+- `scripts/sync-kv.ts` — upsert 대상 키와 겹치는 delete 키를 최종 결과에서 제거
+- `scripts/__tests__/sync-kv.test.ts` — same-key rename regression test 추가
+- `docs/DEV_PROGRESS.md` — Phase 5 상태를 완료로 갱신
+
+**기술적 결정:**
+
+### 1. delete 목록을 최종 정리 단계에서 필터링
+- **결정:** `incrementalKvEntries()` 마지막에 `upsert` 키 집합을 만들고, 같은 키가 `delete`에도 있으면 제거
+- **이유:** rename 처리뿐 아니라 동일 배치에서 "최종 상태가 존재하는 키"를 보존하는 쪽이 안전함. CLI가 put 후 delete 순서로 실행되더라도 결과가 현재 데이터 트리와 일치하도록 보장
+- **검토한 대안:** rename 분기 내부에서 old/new keyword 비교 후 조건부 delete — 동작은 가능하지만, 여러 변경 유형이 섞이는 배치 전체를 한 번에 정리하는 현재 방식이 더 견고함
+
+---
+
+## 2026-04-13 — Incremental KV Sync (commit-based diff)
+
+**작업 내용:**
+Full sync를 대체하는 증분 KV 동기화 구현. 매 push에서 변경된 키워드만 동기화하여 Cloudflare KV free tier(1K writes/day) 내에서 안정적 운영.
+
+**변경 파일:**
+- `scripts/sync-kv.ts` — `incrementalKvEntries()`, `parseGitDiffNameStatus()`, `chunk()`, `writeDiffJsonl()`, wrangler helpers, CLI mode routing 추가
+- `scripts/__tests__/sync-kv.test.ts` — diff parsing, incremental 분류, chunking, dry-run 테스트 추가
+- `.github/workflows/sync-kv.yml` — 4-step 쉘 스크립트를 단일 TypeScript 호출로 교체
+
+**기술적 결정:**
+
+### 1. KV 내부에 sync commit SHA 저장
+- **결정:** `__sync_commit__` 키로 KV에 직접 저장
+- **이유:** 외부 상태 저장소(파일, GitHub Actions cache 등) 불필요. KV 자체가 single source of truth
+- **안전성:** `__sync_commit__`은 키워드 검증 regex 통과 불가 → Workers에서 조회 불가
+
+### 2. `git diff --name-status` 사용 (v1의 `--name-only` 대신)
+- **결정:** A/M/D/R 상태 구분으로 rename을 별도 처리
+- **이유:** rename 시 old keyword delete + new keyword upsert 필요. `--name-only`로는 구분 불가
+
+### 3. 삭제 키워드 추출에 `git show` 사용
+- **결정:** 파일명 파싱 대신 `git show $COMMIT:$FILE`로 JSON의 keyword 필드 추출
+- **이유:** 영어 키워드는 소문자 변환되어 파일명과 keyword가 일치하지 않을 수 있음
+
+### 4. fetch-depth: 0으로 변경
+- **결정:** workflow의 `fetch-depth: 2` → `0` (full history)
+- **이유:** `__sync_commit__`이 임의의 과거 커밋일 수 있어 shallow clone으로는 diff 불가
+- **트레이드오프:** checkout 시간 약간 증가하지만 `filter: blob:none`으로 blob 제외하여 최소화
+
+---
+
 ## 2026-04-12 19:50 — `validate-issue` workflow improvement (manual rerun & auto-reopen)
 
 **작업 내용:**
