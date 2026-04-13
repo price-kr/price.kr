@@ -3,12 +3,17 @@ name: Sync Keywords to Cloudflare KV
 on:
   push:
     branches: [main]
-    paths:
-      - "data/**"
-      - "!data/whitelist.json"
-      - "!data/blocklist.json"
-      - "!data/profanity-blocklist.json"
+    paths: ["data/**"]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Sync mode: auto (incremental) or full"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - full
 
 jobs:
   sync:
@@ -19,102 +24,21 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           filter: blob:none
-          fetch-depth: 2
+          fetch-depth: 0
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: "20"
 
-      - name: Install wrangler
-        run: npm install -g wrangler@4
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Get changed keyword files
-        id: changes
-        run: |
-          # Prevent git from quoting Korean filenames with octal escapes
-          git config core.quotepath false
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "mode=full" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            echo "mode=full" >> $GITHUB_OUTPUT
-          else
-            if ! CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'data/**/*.json' 2>/dev/null | grep -v -E '(blocklist|whitelist|profanity-blocklist)\.json' || true); then
-              echo "git diff failed, falling back to full sync"
-              echo "mode=full" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            DELETED=$(git diff --name-only --diff-filter=D "${{ github.event.before }}" "${{ github.sha }}" -- 'data/**/*.json' 2>/dev/null | grep -v -E '(blocklist|whitelist|profanity-blocklist)\.json' || true)
-            if [ -z "$CHANGED" ] && [ -z "$DELETED" ]; then
-              echo "mode=none" >> $GITHUB_OUTPUT
-            else
-              # Fall back to full sync when too many files changed (avoids
-              # sequential API calls that may hit Cloudflare rate limits)
-              CHANGED_COUNT=$(echo "$CHANGED" | grep -c . || echo 0)
-              if [ "$CHANGED_COUNT" -gt 100 ]; then
-                echo "Large diff ($CHANGED_COUNT files), falling back to full sync"
-                echo "mode=full" >> $GITHUB_OUTPUT
-                exit 0
-              fi
-              echo "mode=incremental" >> $GITHUB_OUTPUT
-              if [ -n "$CHANGED" ]; then
-                echo "$CHANGED" > /tmp/changed-files.txt
-              fi
-              if [ -n "$DELETED" ]; then
-                echo "$DELETED" > /tmp/deleted-files.txt
-              fi
-            fi
-          fi
-
-      - name: Sync to KV (incremental)
-        if: steps.changes.outputs.mode == 'incremental'
+      - name: Sync to Cloudflare KV
+        working-directory: scripts
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
         run: |
-          [ ! -f /tmp/changed-files.txt ] && exit 0
-          while IFS= read -r file; do
-            if [ -f "$file" ]; then
-              KEYWORD=$(jq -r '.keyword' "$file")
-              URL=$(jq -r '.url' "$file")
-              echo "Syncing: $KEYWORD → $URL"
-
-              # Retry up to 3 times
-              for i in 1 2 3; do
-                wrangler kv key put --remote --namespace-id="$CF_KV_NAMESPACE_ID" "$KEYWORD" "$URL" && break
-                echo "Retry $i..."
-                sleep 2
-              done
-            fi
-          done < /tmp/changed-files.txt
-
-      - name: Delete removed keywords from KV
-        if: steps.changes.outputs.mode == 'incremental'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
-        run: |
-          if [ -f /tmp/deleted-files.txt ]; then
-            while IFS= read -r file; do
-              # Extract keyword from filename (e.g., data/ㅁ/만/만두.json → 만두)
-              KEYWORD=$(basename "$file" .json)
-              echo "Deleting from KV: $KEYWORD"
-              for i in 1 2 3; do
-                wrangler kv key delete --remote --namespace-id="$CF_KV_NAMESPACE_ID" "$KEYWORD" && break
-                echo "Retry $i..."
-                sleep 2
-              done
-            done < /tmp/deleted-files.txt
-          fi
-
-      - name: Sync to KV (full)
-        if: steps.changes.outputs.mode == 'full'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
-        run: |
-          # Build bulk JSON from all data files
-          find data -name '*.json' ! -name 'blocklist.json' ! -name 'whitelist.json' ! -name 'profanity-blocklist.json' -exec cat {} + | \
-            jq -s '[.[] | select(.keyword != null and .url != null) | {key: .keyword, value: .url}]' > /tmp/kv-bulk.json
-
-          wrangler kv bulk put --remote --namespace-id="$CF_KV_NAMESPACE_ID" /tmp/kv-bulk.json
+          MODE="${{ github.event.inputs.mode || 'auto' }}"
+          echo "Sync mode: $MODE"
+          npx tsx sync-kv.ts "$MODE"
