@@ -261,27 +261,28 @@ export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {
 
   // 1st pass: collect canonicals and separate aliases
   for (const file of files) {
-    try {
-      const content = await readFile(file, "utf-8");
-      const data = JSON.parse(content);
-      if (isCanonicalData(data)) {
-        canonicalMap.set(data.keyword, data.url);
-      } else if (isAliasData(data)) {
-        pendingAliases.push({ keyword: data.keyword, alias_of: data.alias_of });
+      try {
+          const content = await readFile(file, "utf-8");
+          const data = JSON.parse(content);
+          if (isCanonicalData(data)) {
+              canonicalMap.set(data.keyword, data.url);
+          } else if (isAliasData(data)) {
+              pendingAliases.push({ keyword: data.keyword, alias_of: data.alias_of });
+          }
+      } catch {
+          console.warn(`Skipping malformed JSON: ${file}`);
       }
-    } catch {
-      console.warn(`Skipping malformed JSON: ${file}`);
-    }
   }
 
   const entries: KvEntry[] = [];
 
-  // Add all canonicals
+  // Add all canonicals first
   for (const [keyword, url] of canonicalMap) {
-    entries.push({ key: keyword, value: url });
+      entries.push({ key: keyword, value: url });
   }
 
   // 2nd pass: resolve aliases to canonical URLs
+  // Chains are forbidden: alias_of must point directly to a canonical, not another alias
   for (const { keyword, alias_of } of pendingAliases) {
     const url = canonicalMap.get(alias_of);
     if (url === undefined) {
@@ -298,7 +299,6 @@ export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {
 
 const SYNC_COMMIT_KEY = "__sync_commit__";
 const BULK_CHUNK_SIZE = 10_000;
-
 export function buildBulkPutArgs(namespaceId: string, tmpFile: string): string[] {
   return ["wrangler", "kv", "bulk", "put", "--remote", `--namespace-id=${namespaceId}`, tmpFile];
 }

@@ -46,3 +46,12 @@ jobs:
           MODE="${{ github.event.inputs.mode || 'auto' }}"
           echo "Sync mode: $MODE"
           npx tsx sync-kv.ts "$MODE"
+
+      - name: Notify on KV Sync Failure
+        if: ${{ failure() && github.run_id != '' }} # Check if any previous step in the job failed
+        run: |
+          echo "::error::Cloudflare KV sync failed. Manual intervention may be required."
+          echo "Check the logs above for details from sync-kv.ts."
+          # In a real-world scenario, this step could trigger a Slack/email notification
+          # using a dedicated GitHub Action or webhook.
+          # For now, we rely on the clear failure indication in the job output.
