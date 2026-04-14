@@ -115,7 +115,9 @@ jobs:
         env:
           KEYWORD: ${{ steps.parse.outputs.keyword }}
           URL_INPUT: ${{ steps.parse.outputs.url }}
+          CANONICAL: ${{ steps.parse.outputs.canonical }}
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
+          LABELS: ${{ steps.context.outputs.labels }}
           GOOGLE_SAFE_BROWSING_API_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_API_KEY }}
         with:
           script: |
