@@ -448,9 +448,10 @@ jobs:
 
             // Normalize English keywords to lowercase to match filename
             const normalizedKeyword = /^[a-zA-Z]/.test(targetKeyword) ? targetKeyword.toLowerCase() : targetKeyword;
+            const normalizedCanonical = /^[a-zA-Z]/.test(canonical) ? canonical.toLowerCase() : canonical;
             let content;
             if (isAliasRequest) {
-              content = JSON.stringify({ keyword: normalizedKeyword, alias_of: canonical, created: new Date().toISOString().split('T')[0] }, null, 2) + '\n';
+              content = JSON.stringify({ keyword: normalizedKeyword, alias_of: normalizedCanonical, created: new Date().toISOString().split('T')[0] }, null, 2) + '\n';
             } else if (isDeleteRequest) {
               content = null; // Delete action
             } else {
