@@ -108,6 +108,70 @@ describe("buildKvEntries", () => {
   });
 });
 
+describe("buildKvEntries alias resolution", () => {
+  it("resolves alias to canonical url", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "ㄱ", "금"), { recursive: true });
+    writeFileSync(
+      join(tmp, "ㄱ", "금", "금값.json"),
+      JSON.stringify({ keyword: "금값", url: "https://finance.naver.com/goldprice/", created: "2026-04-14" })
+    );
+    writeFileSync(
+      join(tmp, "ㄱ", "금", "금.json"),
+      JSON.stringify({ keyword: "금", alias_of: "금값", created: "2026-04-14" })
+    );
+
+    const entries = await buildKvEntries(tmp);
+    const gold = entries.find(e => e.key === "금");
+    const goldprice = entries.find(e => e.key === "금값");
+    expect(goldprice).toEqual({ key: "금값", value: "https://finance.naver.com/goldprice/" });
+    expect(gold).toEqual({ key: "금", value: "https://finance.naver.com/goldprice/" });
+    expect(entries).toHaveLength(2);
+  });
+
+  it("skips alias when canonical does not exist", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(
+      join(tmp, "_en", "orphan.json"),
+      JSON.stringify({ keyword: "orphan", alias_of: "nonexistent", created: "2026-04-14" })
+    );
+
+    const entries = await buildKvEntries(tmp);
+    expect(entries).toHaveLength(0);
+  });
+
+  it("skips alias when target is also an alias (chain forbidden)", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(
+      join(tmp, "_en", "a.json"),
+      JSON.stringify({ keyword: "a", alias_of: "b", created: "2026-04-14" })
+    );
+    writeFileSync(
+      join(tmp, "_en", "b.json"),
+      JSON.stringify({ keyword: "b", alias_of: "c", created: "2026-04-14" })
+    );
+
+    const entries = await buildKvEntries(tmp);
+    expect(entries).toHaveLength(0);
+  });
+
+  it("handles multiple aliases for same canonical", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    const url = "https://example.com/gold";
+    writeFileSync(join(tmp, "_en", "gold.json"), JSON.stringify({ keyword: "gold", url, created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "golden.json"), JSON.stringify({ keyword: "golden", alias_of: "gold", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "gilded.json"), JSON.stringify({ keyword: "gilded", alias_of: "gold", created: "2026-04-14" }));
+
+    const entries = await buildKvEntries(tmp);
+    expect(entries).toHaveLength(3);
+    expect(entries.find(e => e.key === "golden")).toEqual({ key: "golden", value: url });
+    expect(entries.find(e => e.key === "gilded")).toEqual({ key: "gilded", value: url });
+  });
+});
+
 describe("parseGitDiffNameStatus", () => {
   it("parses added files", () => {
     const input = "A\tdata/ㅁ/만/만두.json\n";

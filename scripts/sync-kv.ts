@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile } from "fs/promises";
 import { join, basename } from "path";
 import { existsSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";
+import { isAliasData, isCanonicalData } from "./validate-keyword.js";
 
 export interface KvEntry {
   key: string;
@@ -169,18 +170,39 @@ async function findJsonFiles(dir: string): Promise<string[]> {
 
 export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {
   const files = await findJsonFiles(dataDir);
-  const entries: KvEntry[] = [];
+  const canonicalMap = new Map<string, string>(); // keyword → url
+  const pendingAliases: Array<{ keyword: string; alias_of: string }> = [];
 
+  // 1st pass: collect canonicals and separate aliases
   for (const file of files) {
     try {
       const content = await readFile(file, "utf-8");
       const data = JSON.parse(content);
-      if (data && typeof data.keyword === "string" && typeof data.url === "string") {
-        entries.push({ key: data.keyword, value: data.url });
+      if (isCanonicalData(data)) {
+        canonicalMap.set(data.keyword, data.url);
+      } else if (isAliasData(data)) {
+        pendingAliases.push({ keyword: data.keyword, alias_of: data.alias_of });
       }
     } catch {
       console.warn(`Skipping malformed JSON: ${file}`);
     }
+  }
+
+  const entries: KvEntry[] = [];
+
+  // Add all canonicals
+  for (const [keyword, url] of canonicalMap) {
+    entries.push({ key: keyword, value: url });
+  }
+
+  // 2nd pass: resolve aliases to canonical URLs
+  for (const { keyword, alias_of } of pendingAliases) {
+    const url = canonicalMap.get(alias_of);
+    if (url === undefined) {
+      console.warn(`Skipping alias "${keyword}": canonical "${alias_of}" not found or is itself an alias`);
+      continue;
+    }
+    entries.push({ key: keyword, value: url });
   }
 
   return entries;
