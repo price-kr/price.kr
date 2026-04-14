@@ -121,13 +121,17 @@ jobs:
                   console.log(`Merged PR #${pr.number}: ${pr.title}`);
 
                   // Explicitly trigger sync-kv because GITHUB_TOKEN merges don't fire push events
-                  await github.rest.actions.createWorkflowDispatch({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    workflow_id: 'sync-kv.yml',
-                    ref: 'main'
-                  });
-                  console.log(`Triggered sync-kv.yml for PR #${pr.number}`);
+                  try {
+                    await github.rest.actions.createWorkflowDispatch({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      workflow_id: 'sync-kv.yml',
+                      ref: 'main'
+                    });
+                    console.log(`Triggered sync-kv.yml for PR #${pr.number}`);
+                  } catch (syncErr) {
+                    console.error(`Failed to trigger sync-kv.yml for PR #${pr.number}:`, syncErr.message);
+                  }
                 } catch (err) {
                   console.error(`Failed to merge PR #${pr.number}:`, err.message);
                   // Notify on merge failure
