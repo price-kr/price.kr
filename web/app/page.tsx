@@ -3,13 +3,11 @@ import { SearchBar } from "@/components/SearchBar";
 
 export default async function HomePage() {
   const dataDir = getDataDir();
-  const { keywords, aliases } = await loadData(dataDir).catch(() => ({ keywords: [], aliases: [] }));
+  const { keywords } = await loadData(dataDir).catch(() => ({ keywords: [] }));
 
-  // Merge: canonical keywords first, then alias keywords
-  const keywordList = [
-    ...keywords.map((k) => k.keyword),
-    ...aliases.map((a) => a.keyword),
-  ];
+  // `loadData` already resolves aliases into `keywords`, so use only `keywords`
+  // here to avoid duplicate suggestions and duplicate React keys in SearchBar.
+  const keywordList = keywords.map((k) => k.keyword);
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">

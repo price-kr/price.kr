@@ -96,7 +96,7 @@ export async function loadAllAliases(dataDir: string): Promise<AliasEntry[]> {
 
 /** Compute data file path for a keyword (Korean/English/Numeric) */
 function keywordFilePath(keyword: string): string {
-  if (keyword.includes("/") || keyword.includes("..")) {
+  if (keyword.includes("/") || keyword.includes("\\") || keyword.includes("..")) {
     throw new Error("Invalid keyword");
   }
   const CHOSEONG = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];

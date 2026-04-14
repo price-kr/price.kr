@@ -1,4 +1,4 @@
-import { loadAllKeywords, getDataDir, loadKeywordFile, findAliasesOf } from "@/lib/keywords";
+import { loadData, getDataDir, loadKeywordFile } from "@/lib/keywords";
 import { searchKeywords } from "@/lib/hangul";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -9,7 +9,7 @@ interface Props {
 
 /** Pre-generate pages for all known keywords at build time */
 export async function generateStaticParams() {
-  const keywords = await loadAllKeywords(getDataDir()).catch(() => []);
+  const { keywords } = await loadData(getDataDir()).catch(() => ({ keywords: [] }));
   return keywords.map((k) => ({ keyword: k.keyword }));
 }
 
@@ -39,19 +39,37 @@ export default async function KeywordPage({ params }: Props) {
   const dataDir = getDataDir();
 
   // Determine keyword status: alias, canonical, or unregistered
-  const keywordData = await loadKeywordFile(decoded, dataDir);
+  let keywordData = null;
+  try {
+    keywordData = await loadKeywordFile(decoded, dataDir);
+  } catch {
+    keywordData = null;
+  }
   const isAlias = keywordData !== null && typeof (keywordData as any).alias_of === "string";
   const isCanonical = keywordData !== null && typeof (keywordData as any).url === "string";
 
-  // For canonical: find its aliases
-  const aliases = isCanonical ? await findAliasesOf(decoded, dataDir) : [];
+  // Use stored keyword name for canonical lookup to handle case differences (e.g. "Gold" vs "gold")
+  const canonicalLookupKeyword =
+    isCanonical && typeof (keywordData as any).keyword === "string"
+      ? ((keywordData as any).keyword as string)
+      : decoded;
 
-  // For unregistered: find similar keywords
-  const allKeywords = await loadAllKeywords(dataDir).catch(() => []);
-  const keywordList = allKeywords.map((k) => k.keyword);
-  const similar = !isAlias && !isCanonical
-    ? searchKeywords(decoded.slice(0, 1), keywordList).filter((k) => k !== decoded).slice(0, 5)
-    : [];
+  // For canonical: load data once and derive aliases without a redundant scan
+  // For unregistered: load data once to find similar keywords
+  // For alias: no loadData call needed
+  let aliases: string[] = [];
+  let similar: string[] = [];
+
+  if (isCanonical) {
+    const { aliases: allAliases } = await loadData(dataDir).catch(() => ({ keywords: [], aliases: [] }));
+    aliases = allAliases.filter((a) => a.alias_of === canonicalLookupKeyword).map((a) => a.keyword);
+  } else if (!isAlias) {
+    const { keywords: allKeywords } = await loadData(dataDir).catch(() => ({ keywords: [], aliases: [] }));
+    const keywordList = allKeywords.map((k) => k.keyword);
+    similar = searchKeywords(decoded.slice(0, 1), keywordList)
+      .filter((k) => k !== decoded)
+      .slice(0, 5);
+  }
 
   const issueUrl = `https://github.com/price-kr/price.kr/issues/new?template=new-keyword.yml&title=${encodeURIComponent(`[키워드 제안] ${decoded}`)}`;
   const canonicalKeyword = isAlias ? (keywordData as any).alias_of as string : null;
