@@ -1,1 +1,5 @@
-{"keyword": "금값", "url": "https://finance.naver.com/goldprice/", "created": "2026-04-14"}
+{
+  "keyword": "금값",
+  "url": "https://finance.naver.com/marketindex/goldDetail.naver",
+  "created": "2026-04-12"
+}
