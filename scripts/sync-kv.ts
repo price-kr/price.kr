@@ -76,6 +76,7 @@ export async function incrementalKvEntries(
   const changes = parseGitDiffNameStatus(diffOutput);
   const upsert: KvEntry[] = [];
   const deleteKeys: string[] = [];
+  const dataDir = join(repoDir, "data");
 
   for (const change of changes) {
     if (change.status === "A" || change.status === "M") {
@@ -84,8 +85,25 @@ export async function incrementalKvEntries(
       try {
         const content = await readFile(fullPath, "utf-8");
         const data = JSON.parse(content);
-        if (typeof data.keyword === "string" && typeof data.url === "string") {
+        if (isCanonicalData(data)) {
           upsert.push({ key: data.keyword, value: data.url });
+          // Back-propagate new URL to all aliases of this canonical
+          const aliases = await findAliasesOf(data.keyword, dataDir);
+          for (const aliasKeyword of aliases) {
+            upsert.push({ key: aliasKeyword, value: data.url });
+          }
+        } else if (isAliasData(data)) {
+          // Resolve canonical URL from data directory
+          const allFiles = await findJsonFiles(dataDir);
+          for (const f of allFiles) {
+            try {
+              const c = JSON.parse(await readFile(f, "utf-8"));
+              if (isCanonicalData(c) && c.keyword === data.alias_of) {
+                upsert.push({ key: data.keyword, value: c.url });
+                break;
+              }
+            } catch { /* skip */ }
+          }
         }
       } catch {
         console.warn(`Skipping malformed JSON: ${change.file}`);
@@ -97,7 +115,12 @@ export async function incrementalKvEntries(
           { cwd: repoDir, encoding: "utf-8" }
         );
         const data = JSON.parse(oldContent);
-        if (typeof data.keyword === "string") {
+        if (isCanonicalData(data)) {
+          deleteKeys.push(data.keyword);
+          // Also delete all aliases still pointing to this canonical
+          const aliases = await findAliasesOf(data.keyword, dataDir);
+          deleteKeys.push(...aliases);
+        } else if (isAliasData(data)) {
           deleteKeys.push(data.keyword);
         }
       } catch {
@@ -123,8 +146,19 @@ export async function incrementalKvEntries(
         try {
           const content = await readFile(fullPath, "utf-8");
           const data = JSON.parse(content);
-          if (typeof data.keyword === "string" && typeof data.url === "string") {
+          if (isCanonicalData(data)) {
             upsert.push({ key: data.keyword, value: data.url });
+          } else if (isAliasData(data)) {
+            const allFiles = await findJsonFiles(dataDir);
+            for (const f of allFiles) {
+              try {
+                const c = JSON.parse(await readFile(f, "utf-8"));
+                if (isCanonicalData(c) && c.keyword === data.alias_of) {
+                  upsert.push({ key: data.keyword, value: c.url });
+                  break;
+                }
+              } catch { /* skip */ }
+            }
           }
         } catch {
           console.warn(`Skipping malformed JSON: ${change.file}`);
@@ -166,6 +200,23 @@ async function findJsonFiles(dir: string): Promise<string[]> {
     }
   }
   return results;
+}
+
+export async function findAliasesOf(canonicalKeyword: string, dataDir: string): Promise<string[]> {
+  const files = await findJsonFiles(dataDir);
+  const aliases: string[] = [];
+  for (const file of files) {
+    try {
+      const content = await readFile(file, "utf-8");
+      const data = JSON.parse(content);
+      if (isAliasData(data) && data.alias_of === canonicalKeyword) {
+        aliases.push(data.keyword);
+      }
+    } catch {
+      // skip malformed
+    }
+  }
+  return aliases;
 }
 
 export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {

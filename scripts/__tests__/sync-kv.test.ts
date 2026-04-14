@@ -8,6 +8,7 @@ import {
   readSyncCommit,
   buildBulkPutArgs,
   buildBulkDeleteArgs,
+  findAliasesOf,
 } from "../sync-kv.js";
 import { writeFileSync, mkdirSync, rmSync, readFileSync } from "fs";
 import { join } from "path";
@@ -410,5 +411,89 @@ describe("wrangler helpers", () => {
       "wrangler", "kv", "bulk", "delete",
       "--remote", `--namespace-id=${NAMESPACE_ID}`, "/tmp/test.json",
     ]);
+  });
+});
+
+describe("findAliasesOf", () => {
+  it("returns alias keywords pointing to the given canonical", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(join(tmp, "_en", "gold.json"), JSON.stringify({ keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "golden.json"), JSON.stringify({ keyword: "golden", alias_of: "gold", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "gilded.json"), JSON.stringify({ keyword: "gilded", alias_of: "gold", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "other.json"), JSON.stringify({ keyword: "other", alias_of: "silver", created: "2026-04-14" }));
+
+    const aliases = await findAliasesOf("gold", tmp);
+    expect(aliases.sort()).toEqual(["gilded", "golden"]);
+  });
+
+  it("returns empty array when canonical has no aliases", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(join(tmp, "_en", "gold.json"), JSON.stringify({ keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" }));
+
+    const aliases = await findAliasesOf("gold", tmp);
+    expect(aliases).toEqual([]);
+  });
+});
+
+describe("incrementalKvEntries alias awareness", () => {
+  it("alias file added: upserts alias with canonical url", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/gold.json": { keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" },
+    });
+    const filePath = join(dir, "data/_en/golden.json");
+    writeFileSync(filePath, JSON.stringify({ keyword: "golden", alias_of: "gold", created: "2026-04-14" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "add alias golden"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([{ key: "golden", value: "https://example.com/gold" }]);
+    expect(result.delete).toEqual([]);
+  });
+
+  it("canonical modified: upserts canonical and all aliases with new url", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/gold.json": { keyword: "gold", url: "https://old.com/gold", created: "2026-04-14" },
+      "data/_en/golden.json": { keyword: "golden", alias_of: "gold", created: "2026-04-14" },
+    });
+    writeFileSync(join(dir, "data/_en/gold.json"), JSON.stringify({ keyword: "gold", url: "https://new.com/gold", created: "2026-04-14" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "update gold url"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert.find(e => e.key === "gold")).toEqual({ key: "gold", value: "https://new.com/gold" });
+    expect(result.upsert.find(e => e.key === "golden")).toEqual({ key: "golden", value: "https://new.com/gold" });
+    expect(result.delete).toEqual([]);
+  });
+
+  it("alias file deleted: deletes alias key only", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/gold.json": { keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" },
+      "data/_en/golden.json": { keyword: "golden", alias_of: "gold", created: "2026-04-14" },
+    });
+    const { unlinkSync } = await import("fs");
+    unlinkSync(join(dir, "data/_en/golden.json"));
+    git(["add", "."], dir);
+    git(["commit", "-m", "delete alias golden"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete).toEqual(["golden"]);
+  });
+
+  it("canonical deleted: deletes canonical key and all alias keys", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/gold.json": { keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" },
+      "data/_en/golden.json": { keyword: "golden", alias_of: "gold", created: "2026-04-14" },
+    });
+    const { unlinkSync } = await import("fs");
+    unlinkSync(join(dir, "data/_en/gold.json"));
+    git(["add", "."], dir);
+    git(["commit", "-m", "delete canonical gold"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete.sort()).toEqual(["gold", "golden"]);
   });
 });
