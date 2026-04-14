@@ -78,6 +78,22 @@ export async function incrementalKvEntries(
   const deleteKeys: string[] = [];
   const dataDir = join(repoDir, "data");
 
+  // Pre-pass: collect keywords of all D-alias files from git history
+  const deletedAliasKeywords = new Map<string, string>(); // aliasKeyword → alias_of
+  for (const change of changes) {
+    if (change.status !== "D") continue;
+    try {
+      const oldContent = execFileSync(
+        "git", ["show", `${lastCommit}:${change.file}`],
+        { cwd: repoDir, encoding: "utf-8" }
+      );
+      const data = JSON.parse(oldContent);
+      if (isAliasData(data)) {
+        deletedAliasKeywords.set(data.keyword, data.alias_of);
+      }
+    } catch { /* skip */ }
+  }
+
   for (const change of changes) {
     if (change.status === "A" || change.status === "M") {
       const fullPath = join(repoDir, change.file);
@@ -117,9 +133,13 @@ export async function incrementalKvEntries(
         const data = JSON.parse(oldContent);
         if (isCanonicalData(data)) {
           deleteKeys.push(data.keyword);
-          // Also delete all aliases still pointing to this canonical
-          const aliases = await findAliasesOf(data.keyword, dataDir);
-          deleteKeys.push(...aliases);
+          // Collect aliases from: (a) deleted in same diff, (b) still on disk
+          const aliasesFromDiff = [...deletedAliasKeywords.entries()]
+            .filter(([, alias_of]) => alias_of === data.keyword)
+            .map(([keyword]) => keyword);
+          const aliasesFromDisk = await findAliasesOf(data.keyword, dataDir);
+          const allAliases = [...new Set([...aliasesFromDiff, ...aliasesFromDisk])];
+          deleteKeys.push(...allAliases);
         } else if (isAliasData(data)) {
           deleteKeys.push(data.keyword);
         }

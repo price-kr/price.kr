@@ -496,4 +496,20 @@ describe("incrementalKvEntries alias awareness", () => {
     expect(result.upsert).toEqual([]);
     expect(result.delete.sort()).toEqual(["gold", "golden"]);
   });
+
+  it("canonical and aliases deleted together: deletes all keys", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/gold.json": { keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" },
+      "data/_en/golden.json": { keyword: "golden", alias_of: "gold", created: "2026-04-14" },
+    });
+    const { unlinkSync } = await import("fs");
+    unlinkSync(join(dir, "data/_en/gold.json"));
+    unlinkSync(join(dir, "data/_en/golden.json")); // also delete the alias
+    git(["add", "."], dir);
+    git(["commit", "-m", "delete canonical and alias together"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete.sort()).toEqual(["gold", "golden"]);
+  });
 });
