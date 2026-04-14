@@ -1,9 +1,15 @@
-import { loadAllKeywords, getDataDir } from "@/lib/keywords";
+import { loadData, getDataDir } from "@/lib/keywords";
 import { SearchBar } from "@/components/SearchBar";
 
 export default async function HomePage() {
-  const keywords = await loadAllKeywords(getDataDir()).catch(() => []);
-  const keywordList = keywords.map((k) => k.keyword);
+  const dataDir = getDataDir();
+  const { keywords, aliases } = await loadData(dataDir).catch(() => ({ keywords: [], aliases: [] }));
+
+  // Merge: canonical keywords first, then alias keywords
+  const keywordList = [
+    ...keywords.map((k) => k.keyword),
+    ...aliases.map((a) => a.keyword),
+  ];
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">

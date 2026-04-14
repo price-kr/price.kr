@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { loadAllKeywords } from "@/lib/keywords";
+import { loadAllKeywords, loadAllAliases, findAliasesOf, loadKeywordFile } from "@/lib/keywords";
 import { writeFileSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -99,5 +99,92 @@ describe("loadAllKeywords", () => {
 
     expect(goldPrice?.url).toBe("https://gold.com");
     expect(gold?.url).toBe("https://gold.com");
+  });
+});
+
+describe("loadAllAliases", () => {
+  it("returns alias entries with keyword and alias_of", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "ㄱ", "금"), { recursive: true });
+    writeFileSync(
+      join(tmp, "ㄱ", "금", "금값.json"),
+      JSON.stringify({ keyword: "금값", url: "https://example.com/gold", created: "2026-04-14" })
+    );
+    writeFileSync(
+      join(tmp, "ㄱ", "금", "금.json"),
+      JSON.stringify({ keyword: "금", alias_of: "금값", created: "2026-04-14" })
+    );
+
+    const aliases = await loadAllAliases(tmp);
+    expect(aliases).toHaveLength(1);
+    expect(aliases[0]).toEqual({ keyword: "금", alias_of: "금값", created: "2026-04-14" });
+  });
+
+  it("excludes canonical entries (those with url)", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(join(tmp, "_en", "gold.json"), JSON.stringify({ keyword: "gold", url: "https://example.com", created: "2026-04-14" }));
+
+    const aliases = await loadAllAliases(tmp);
+    expect(aliases).toHaveLength(0);
+  });
+
+  it("excludes non-keyword files", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(join(tmp, "_en", "golden.json"), JSON.stringify({ keyword: "golden", alias_of: "gold", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "blocklist.json"), JSON.stringify(["bad"]));
+
+    const aliases = await loadAllAliases(tmp);
+    expect(aliases).toHaveLength(1);
+  });
+});
+
+describe("findAliasesOf", () => {
+  it("returns keywords of alias entries pointing to the canonical", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(join(tmp, "_en", "gold.json"), JSON.stringify({ keyword: "gold", url: "https://example.com", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "golden.json"), JSON.stringify({ keyword: "golden", alias_of: "gold", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "gilded.json"), JSON.stringify({ keyword: "gilded", alias_of: "gold", created: "2026-04-14" }));
+    writeFileSync(join(tmp, "_en", "other.json"), JSON.stringify({ keyword: "other", alias_of: "silver", created: "2026-04-14" }));
+
+    const aliases = await findAliasesOf("gold", tmp);
+    expect(aliases.sort()).toEqual(["gilded", "golden"]);
+  });
+
+  it("returns empty array when canonical has no aliases", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "_en"), { recursive: true });
+    writeFileSync(join(tmp, "_en", "gold.json"), JSON.stringify({ keyword: "gold", url: "https://example.com", created: "2026-04-14" }));
+
+    const aliases = await findAliasesOf("gold", tmp);
+    expect(aliases).toEqual([]);
+  });
+});
+
+describe("loadKeywordFile", () => {
+  it("returns canonical data for a canonical keyword", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "ㄱ", "금"), { recursive: true });
+    writeFileSync(join(tmp, "ㄱ", "금", "금값.json"), JSON.stringify({ keyword: "금값", url: "https://example.com", created: "2026-04-14" }));
+
+    const result = await loadKeywordFile("금값", tmp);
+    expect(result).toEqual({ keyword: "금값", url: "https://example.com", created: "2026-04-14" });
+  });
+
+  it("returns alias data for an alias keyword", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "ㄱ", "금"), { recursive: true });
+    writeFileSync(join(tmp, "ㄱ", "금", "금.json"), JSON.stringify({ keyword: "금", alias_of: "금값", created: "2026-04-14" }));
+
+    const result = await loadKeywordFile("금", tmp);
+    expect(result).toEqual({ keyword: "금", alias_of: "금값", created: "2026-04-14" });
+  });
+
+  it("returns null for an unregistered keyword", async () => {
+    const tmp = createTmpDir();
+    const result = await loadKeywordFile("없는키워드", tmp);
+    expect(result).toBeNull();
   });
 });
