@@ -131,8 +131,11 @@ export async function incrementalKvEntries(
         } else if (isAliasData(data)) {
           // Resolve canonical URL from in-memory map
           const url = canonicalToUrlMap.get(data.alias_of);
-          if (url) {
+          if (url !== undefined) {
             upsert.push({ key: data.keyword, value: url });
+          } else {
+            // Canonical not found; remove any stale KV entry for this alias
+            deleteKeys.push(data.keyword);
           }
         }
       } catch {
@@ -189,8 +192,11 @@ export async function incrementalKvEntries(
             }
           } else if (isAliasData(data)) {
             const url = canonicalToUrlMap.get(data.alias_of);
-            if (url) {
+            if (url !== undefined) {
               upsert.push({ key: data.keyword, value: url });
+            } else {
+              // Canonical not found; remove any stale KV entry for this alias
+              deleteKeys.push(data.keyword);
             }
           }
         } catch {
@@ -222,6 +228,7 @@ export async function writeDiffJsonl(
 }
 
 async function findJsonFiles(dir: string): Promise<string[]> {
+  if (!existsSync(dir)) return [];
   const results: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {

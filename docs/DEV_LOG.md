@@ -4,7 +4,51 @@
 
 ---
 
-## 2026-04-13 ~16:30 — Sync action wrangler install fix
+## 2026-04-14 ~06:15 — Merge branch feature/keyword-alias into P2 branch (conflict resolution)
+
+**작업 내용:**
+`feature/keyword-alias` 베이스 브랜치의 두 신규 커밋(`f7e0b8a` perf sync-kv 최적화, `b0beac6` P2/P3 문서 추가)을 P2 브랜치에 병합. `scripts/sync-kv.ts`에 3곳의 충돌 발생 → 해소.
+
+**충돌 내용:**
+두 브랜치 모두 독립적으로 `incrementalKvEntries`의 O(N×F) 스캔 최적화를 구현하여 동일한 함수에서 변수명만 다른 두 개의 인덱스 구축 블록이 충돌.
+- 우리 브랜치: `canonicalToUrlMap`, `canonicalToAliasesMap`, `aliasToCanonicalMap`
+- 베이스 브랜치: `canonicalMap`, `aliasIndex`
+
+**해소 방법:**
+1. 중복 스캔 블록 제거 (베이스 브랜치 코드 삭제, 우리 변수명 유지)
+2. 베이스 브랜치의 stale alias 삭제 로직(`deleteKeys.push(data.keyword)`) 채택 — unresolvable alias 발생 시 KV 정리
+3. 우리 브랜치의 rename 핸들러 alias 역전파 로직 보존
+4. 베이스 브랜치에서 추가된 신규 테스트 3건(orphan alias, modified-to-nonexistent, renamed-to-nonexistent) 그대로 포함
+
+**테스트 결과:** 104개 전체 통과 (workers 23 + web 11 + scripts 70)
+
+---
+
+## 2026-04-14 ~04:30 — incrementalKvEntries: O(files+changes) index precompute + stale alias delete
+
+**작업 내용:**
+PR 리뷰 지적 사항 반영. `incrementalKvEntries` 함수에서 canonical 변경 시 마다 `findAliasesOf()` (전체 디렉토리 스캔)를 반복 호출하고, alias 변경 시마다 `findJsonFiles()` + JSON 파싱을 반복 수행하여 O(changes × totalFiles)가 되던 문제를 개선.
+
+**변경 파일:**
+- `scripts/sync-kv.ts` — 루프 전 `canonicalMap`(keyword→url) + `aliasIndex`(canonical→alias[]) 단일 스캔으로 인덱스 구축 후 O(1) 조회로 교체. alias A/M/R에서 canonical을 찾지 못할 경우 delete 발행(stale KV 항목 정리). `findJsonFiles`에 존재하지 않는 디렉토리 방어 처리 추가.
+- `scripts/__tests__/sync-kv.test.ts` — 신규 케이스 3건: alias 추가 시 canonical 없으면 delete, alias 수정 시 canonical 없으면 delete, alias rename 시 canonical 없으면 delete.
+- `docs/DEV_PROGRESS.md` — Phase 6 테이블 추가
+
+**기술적 결정:**
+
+### 1. 인덱스를 루프 전에 한 번만 구축
+- **결정:** `findJsonFiles(dataDir)` 호출을 루프 전으로 이동, 결과로 `canonicalMap`(Map<string,string>)과 `aliasIndex`(Map<string,string[]>)를 미리 구성
+- **이유:** canonical이 N개 수정되면 이전에는 N번 전체 스캔 발생 → O(N × F). 인덱스 1회 구축으로 O(F + N) 달성
+- **대안:** 파일별로 lazy 로딩 + 캐싱 — 구현 복잡도 대비 이득이 없음
+
+### 2. 미해소 alias에 delete 발행
+- **결정:** A/M/R에서 alias의 `alias_of`를 `canonicalMap`에서 찾지 못하면 upsert 대신 delete 발행
+- **이유:** 이전에는 아무 작업도 안 해 stale KV 항목이 남을 수 있었음. full sync와의 수렴성(convergence) 보장을 위해 delete 발행이 올바름
+- **대안:** 그냥 skip — 스테이일 항목 잔류로 full/incremental sync 결과 불일치 발생
+
+---
+
+
 
 **작업 내용:**
 GitHub Actions에서 KV namespace 조회 시 "KV not found"로 실패하던 문제 수정. workflow가 `tsx` 기반 스크립트로 바뀐 뒤에도 로컬 설치 의존성을 가정하고 있었는데, 실제 runner에서는 `wrangler` CLI가 전역으로 준비되지 않아 KV 명령 실행이 실패할 수 있어 설치 스텝을 복원.
