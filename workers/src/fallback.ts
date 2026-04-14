@@ -24,10 +24,21 @@ export function buildFallbackUrl(keyword: string, githubRawBase: string): string
   return `${githubRawBase}/${encodedPath}`;
 }
 
-export function parseKeywordJson(text: string): string | null {
+export interface KeywordData {
+  keyword: string;
+  url?: string;
+  alias_of?: string;
+}
+
+export function parseKeywordJson(text: string): KeywordData | null {
   try {
     const data = JSON.parse(text);
-    return data?.url ?? null;
+    if (typeof data.keyword !== "string") return null;
+    return {
+      keyword: data.keyword,
+      url: typeof data.url === "string" ? data.url : undefined,
+      alias_of: typeof data.alias_of === "string" ? data.alias_of : undefined,
+    };
   } catch {
     return null;
   }
@@ -40,15 +51,25 @@ export function parseKeywordJson(text: string): string | null {
 export async function fetchFallback(
   keyword: string,
   githubRawBase: string,
-  githubToken?: string
+  githubToken?: string,
+  depth: number = 0
 ): Promise<string | null> {
+  // Prevent infinite loops or deep chains
+  if (depth > 1) return null;
+
   // Check Cache API first
   const cache = await caches.open("github-raw-contents");
-  const cacheKey = new Request(keyword);
+  // keyword might be non-ASCII, so use a dummy base URL for Request
+  const cacheKey = new Request(`https://github-raw-cache/${encodeURIComponent(keyword)}`);
   const cached = await cache.match(cacheKey);
   if (cached) {
     const text = await cached.text();
-    return parseKeywordJson(text);
+    const data = parseKeywordJson(text);
+    if (!data) return null;
+    if (data.url) return data.url;
+    if (data.alias_of) {
+      return fetchFallback(data.alias_of, githubRawBase, githubToken, depth + 1);
+    }
   }
 
   // Fetch from GitHub
@@ -67,15 +88,24 @@ export async function fetchFallback(
 
   // Read body as text first, then cache and parse from the string
   const text = await response.text();
+  const data = parseKeywordJson(text);
 
-  // Cache for 5 minutes
-  const responseToCache = new Response(text, {
-    headers: {
-      "Cache-Control": "public, max-age=300, s-maxage=300", // NOTE(cf-cache): s-maxage for edge caching, max-age for browser caching.
-      "Cache-Tag": "github-raw-contents",
-    },
-  });
-  await cache.put(cacheKey, responseToCache).catch(() => { /* noop: cache put failure shouldn't block the response */ });
+  if (data) {
+    // Cache for 5 minutes
+    const responseToCache = new Response(text, {
+      headers: {
+        "Cache-Control": "public, max-age=300, s-maxage=300", // NOTE(cf-cache): s-maxage for edge caching, max-age for browser caching.
+        "Cache-Tag": "github-raw-contents",
+      },
+    });
+    // @ts-ignore - CF Workers Request can take non-standard URLs
+    await cache.put(cacheKey, responseToCache).catch(() => { /* noop: cache put failure shouldn't block the response */ });
 
-  return parseKeywordJson(text);
+    if (data.url) return data.url;
+    if (data.alias_of) {
+      return fetchFallback(data.alias_of, githubRawBase, githubToken, depth + 1);
+    }
+  }
+
+  return null;
 }

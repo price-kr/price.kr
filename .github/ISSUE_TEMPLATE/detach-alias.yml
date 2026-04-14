@@ -1,0 +1,24 @@
+name: "유사어 해제 요청"
+description: "유사어 연결을 해제하고 독립 키워드로 전환합니다"
+labels: ["keyword-alias-detach"]
+body:
+  - type: input
+    id: alias_keyword
+    attributes:
+      label: "해제할 유사어 키워드"
+      description: "현재 유사어로 등록된 키워드 (예: 금)"
+    validations:
+      required: true
+  - type: input
+    id: new_url
+    attributes:
+      label: "새로운 목적지 URL"
+      description: "독립 키워드로 전환 시 연결할 URL"
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: "해제 이유"
+    validations:
+      required: true

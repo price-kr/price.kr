@@ -12,6 +12,12 @@ export interface KeywordEntry {
   created: string;
 }
 
+interface AliasData {
+  keyword: string;
+  alias_of: string;
+  created: string;
+}
+
 const NON_KEYWORD_FILES = new Set([
   "blocklist.json",
   "whitelist.json",
@@ -36,17 +42,35 @@ export async function loadAllKeywords(
   dataDir: string
 ): Promise<KeywordEntry[]> {
   const files = await findJsonFiles(dataDir);
-  const entries: KeywordEntry[] = [];
+  const canonicalMap = new Map<string, KeywordEntry>();
+  const pendingAliases: AliasData[] = [];
 
   for (const file of files) {
     try {
       const content = await readFile(file, "utf-8");
       const parsed = JSON.parse(content);
-      if (parsed && typeof parsed.keyword === "string" && typeof parsed.url === "string") {
-        entries.push(parsed);
+      if (!parsed || typeof parsed.keyword !== "string") continue;
+
+      if (typeof parsed.url === "string") {
+        canonicalMap.set(parsed.keyword, parsed as KeywordEntry);
+      } else if (typeof parsed.alias_of === "string") {
+        pendingAliases.push(parsed as AliasData);
       }
     } catch {
       // Skip malformed JSON files
+    }
+  }
+
+  const entries: KeywordEntry[] = Array.from(canonicalMap.values());
+
+  for (const alias of pendingAliases) {
+    const canonical = canonicalMap.get(alias.alias_of);
+    if (canonical) {
+      entries.push({
+        keyword: alias.keyword,
+        url: canonical.url,
+        created: alias.created,
+      });
     }
   }
 
