@@ -4,26 +4,6 @@
 
 ---
 
-## 2026-04-14 ~06:15 — Merge branch feature/keyword-alias into P2 branch (conflict resolution)
-
-**작업 내용:**
-`feature/keyword-alias` 베이스 브랜치의 두 신규 커밋(`f7e0b8a` perf sync-kv 최적화, `b0beac6` P2/P3 문서 추가)을 P2 브랜치에 병합. `scripts/sync-kv.ts`에 3곳의 충돌 발생 → 해소.
-
-**충돌 내용:**
-두 브랜치 모두 독립적으로 `incrementalKvEntries`의 O(N×F) 스캔 최적화를 구현하여 동일한 함수에서 변수명만 다른 두 개의 인덱스 구축 블록이 충돌.
-- 우리 브랜치: `canonicalToUrlMap`, `canonicalToAliasesMap`, `aliasToCanonicalMap`
-- 베이스 브랜치: `canonicalMap`, `aliasIndex`
-
-**해소 방법:**
-1. 중복 스캔 블록 제거 (베이스 브랜치 코드 삭제, 우리 변수명 유지)
-2. 베이스 브랜치의 stale alias 삭제 로직(`deleteKeys.push(data.keyword)`) 채택 — unresolvable alias 발생 시 KV 정리
-3. 우리 브랜치의 rename 핸들러 alias 역전파 로직 보존
-4. 베이스 브랜치에서 추가된 신규 테스트 3건(orphan alias, modified-to-nonexistent, renamed-to-nonexistent) 그대로 포함
-
-**테스트 결과:** 104개 전체 통과 (workers 23 + web 11 + scripts 70)
-
----
-
 ## 2026-04-14 ~04:30 — incrementalKvEntries: O(files+changes) index precompute + stale alias delete
 
 **작업 내용:**

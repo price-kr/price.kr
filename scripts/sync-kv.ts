@@ -78,26 +78,6 @@ export async function incrementalKvEntries(
   const deleteKeys: string[] = [];
   const dataDir = join(repoDir, "data");
 
-  // Optimization: Scan data directory once to build a map of canonicals and aliases
-  const allJsonFiles = existsSync(dataDir) ? await findJsonFiles(dataDir) : [];
-  const canonicalToUrlMap = new Map<string, string>();
-  const aliasToCanonicalMap = new Map<string, string>(); // aliasKeyword -> canonicalKeyword
-  const canonicalToAliasesMap = new Map<string, string[]>(); // canonicalKeyword -> [aliasKeyword, ...]
-
-  for (const f of allJsonFiles) {
-    try {
-      const c = JSON.parse(await readFile(f, "utf-8"));
-      if (isCanonicalData(c)) {
-        canonicalToUrlMap.set(c.keyword, c.url);
-      } else if (isAliasData(c)) {
-        aliasToCanonicalMap.set(c.keyword, c.alias_of);
-        const aliases = canonicalToAliasesMap.get(c.alias_of) || [];
-        aliases.push(c.keyword);
-        canonicalToAliasesMap.set(c.alias_of, aliases);
-      }
-    } catch { /* skip */ }
-  }
-
   // Pre-pass: collect keywords of all D-alias files from git history
   const deletedAliasKeywords = new Map<string, string>(); // aliasKeyword → alias_of
   for (const change of changes) {
@@ -114,6 +94,24 @@ export async function incrementalKvEntries(
     } catch { /* skip */ }
   }
 
+  // Build canonical map and alias index from current disk state (one-time scan)
+  const allDiskFiles = existsSync(dataDir) ? await findJsonFiles(dataDir) : [];
+  const canonicalMap = new Map<string, string>(); // keyword → url
+  const aliasIndex = new Map<string, string[]>(); // canonicalKeyword → [aliasKeywords]
+  for (const file of allDiskFiles) {
+    try {
+      const content = await readFile(file, "utf-8");
+      const data = JSON.parse(content);
+      if (isCanonicalData(data)) {
+        canonicalMap.set(data.keyword, data.url);
+      } else if (isAliasData(data)) {
+        const list = aliasIndex.get(data.alias_of) ?? [];
+        list.push(data.keyword);
+        aliasIndex.set(data.alias_of, list);
+      }
+    } catch { /* skip */ }
+  }
+
   for (const change of changes) {
     if (change.status === "A" || change.status === "M") {
       const fullPath = join(repoDir, change.file);
@@ -124,13 +122,11 @@ export async function incrementalKvEntries(
         if (isCanonicalData(data)) {
           upsert.push({ key: data.keyword, value: data.url });
           // Back-propagate new URL to all aliases of this canonical
-          const aliases = canonicalToAliasesMap.get(data.keyword) || [];
-          for (const aliasKeyword of aliases) {
+          for (const aliasKeyword of aliasIndex.get(data.keyword) ?? []) {
             upsert.push({ key: aliasKeyword, value: data.url });
           }
         } else if (isAliasData(data)) {
-          // Resolve canonical URL from in-memory map
-          const url = canonicalToUrlMap.get(data.alias_of);
+          const url = canonicalMap.get(data.alias_of);
           if (url !== undefined) {
             upsert.push({ key: data.keyword, value: url });
           } else {
@@ -154,7 +150,7 @@ export async function incrementalKvEntries(
           const aliasesFromDiff = [...deletedAliasKeywords.entries()]
             .filter(([, alias_of]) => alias_of === data.keyword)
             .map(([keyword]) => keyword);
-          const aliasesFromDisk = canonicalToAliasesMap.get(data.keyword) || [];
+          const aliasesFromDisk = aliasIndex.get(data.keyword) ?? [];
           const allAliases = [...new Set([...aliasesFromDiff, ...aliasesFromDisk])];
           deleteKeys.push(...allAliases);
         } else if (isAliasData(data)) {
@@ -186,12 +182,11 @@ export async function incrementalKvEntries(
           if (isCanonicalData(data)) {
             upsert.push({ key: data.keyword, value: data.url });
             // Also update aliases if canonical moved/changed
-            const aliases = canonicalToAliasesMap.get(data.keyword) || [];
-            for (const aliasKeyword of aliases) {
+            for (const aliasKeyword of aliasIndex.get(data.keyword) ?? []) {
               upsert.push({ key: aliasKeyword, value: data.url });
             }
           } else if (isAliasData(data)) {
-            const url = canonicalToUrlMap.get(data.alias_of);
+            const url = canonicalMap.get(data.alias_of);
             if (url !== undefined) {
               upsert.push({ key: data.keyword, value: url });
             } else {
