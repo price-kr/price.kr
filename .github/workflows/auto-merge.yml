@@ -42,8 +42,9 @@ jobs:
             }
 
             for (const pr of prs) {
-              // Only process keyword PRs
-              if (!pr.title.startsWith('[키워드 등록]') && !pr.title.startsWith('[키워드 변경]')) {
+              // Only process automated keyword/alias/delete PRs
+              const automatedPrefixes = ['[키워드 등록]', '[키워드 변경]', '[유사어 등록]', '[유사어 해제]', '[키워드 삭제]'];
+              if (!automatedPrefixes.some(prefix => pr.title.startsWith(prefix))) {
                 continue;
               }
 

@@ -42,10 +42,10 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          SYNC_MODE: ${{ github.event.inputs.mode || 'auto' }}
         run: |
-          MODE="${{ github.event.inputs.mode || 'auto' }}"
-          echo "Sync mode: $MODE"
-          npx tsx sync-kv.ts "$MODE"
+          echo "Sync mode: $SYNC_MODE"
+          npx tsx sync-kv.ts "$SYNC_MODE"
 
       - name: Notify on KV Sync Failure
         if: ${{ failure() && github.run_id != '' }} # Check if any previous step in the job failed

@@ -108,8 +108,10 @@ export default {
     }
 
     // 3. Redirect if we found a valid URL and cache it 1hr in client and cf-edge.
+    // Use new URL().href to normalize percent-encoding and strip CRLF sequences
+    // that could otherwise be injected into the Location header.
     if (targetUrl && isSafeRedirectUrl(targetUrl)) {
-      return redirect302(targetUrl, true);
+      return redirect302(new URL(targetUrl).href, true);
     }
 
     // 4. Invalid URL in KV/fallback — show error page
