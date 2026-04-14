@@ -29,8 +29,8 @@ export function extractSubdomain(
   decoded = decoded.toLowerCase();
 
   // Reject www, empty string, multi-level subdomains, and invalid characters
-  // Valid characters for keywords/subdomains: Korean, alphanumeric, hyphen
-  const validSubdomainRegex = /^[가-힣a-z0-9]+(?:-[가-힣a-z0-9]+)*$/;
+  // Valid characters for keywords/subdomains: Korean syllables, Hangul consonant Jamo, alphanumeric, hyphen
+  const validSubdomainRegex = /^[가-힣ㄱ-ㅎa-z0-9]+(?:-[가-힣ㄱ-ㅎa-z0-9]+)*$/;
 
   if (decoded === "www" || decoded === "" || decoded.includes(".") || !validSubdomainRegex.test(decoded)) {
     return null;
