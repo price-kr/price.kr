@@ -98,7 +98,6 @@ export async function fetchFallback(
         "Cache-Tag": "github-raw-contents",
       },
     });
-    // @ts-ignore - CF Workers Request can take non-standard URLs
     await cache.put(cacheKey, responseToCache).catch(() => { /* noop: cache put failure shouldn't block the response */ });
 
     if (data.url) return data.url;
