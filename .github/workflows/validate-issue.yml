@@ -84,7 +84,13 @@ jobs:
             const urlMatch = body.match(/### 목적지 URL\s*\n\s*(.+)/) || body.match(/### 새로운 URL\s*\n\s*(.+)/) || body.match(/### 새로운 목적지 URL\s*\n\s*(.+)/);
             const canonicalMatch = body.match(/### 연결할 기존 키워드\s*\n\s*(.+)/);
 
-            if (!keywordMatch && !canonicalMatch) {
+            const keyword = keywordMatch ? keywordMatch[1].trim() : '';
+            const url = urlMatch ? urlMatch[1].trim() : '';
+            const canonical = canonicalMatch ? canonicalMatch[1].trim() : '';
+            const currentLabel = context.payload.label?.name || '';
+            const requiresCanonical = currentLabel === 'keyword-alias';
+
+            if (!keyword || (requiresCanonical && !canonical)) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -99,10 +105,6 @@ jobs:
               });
               return;
             }
-
-            const keyword = keywordMatch ? keywordMatch[1].trim() : '';
-            const url = urlMatch ? urlMatch[1].trim() : '';
-            const canonical = canonicalMatch ? canonicalMatch[1].trim() : '';
 
             core.setOutput('keyword', keyword);
             core.setOutput('url', url);
