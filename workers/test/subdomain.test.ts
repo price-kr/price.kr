@@ -23,8 +23,10 @@ describe("extractSubdomain", () => {
     expect(extractSubdomain("a.b.xn--o39aom.kr", "xn--o39aom.kr")).toBeNull();
   });
 
-  it("handles non-decodable punycode gracefully (toUnicode returns original)", () => {
+  it("rejects non-decodable punycode (toUnicode returns original, double-hyphen fails regex)", () => {
+    // punycode.toUnicode("xn--invalid") returns the original "xn--invalid" unchanged.
+    // The double hyphen "--" does not match validSubdomainRegex, so the result is null.
     const result = extractSubdomain("xn--invalid.xn--o39aom.kr", "xn--o39aom.kr");
-    expect(typeof result).toBe("string");
+    expect(result).toBeNull();
   });
 });

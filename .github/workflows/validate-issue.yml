@@ -405,7 +405,7 @@ jobs:
                 });
                 return;
               }
-            } else if (existingFile && !isChangeRequest && !isDeleteRequest) {
+            } else if (existingFile && !isChangeRequest && !isDeleteRequest && !isAliasDetachRequest) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -421,6 +421,22 @@ jobs:
                 repo: context.repo.repo,
                 issue_number: issueNumber,
                 body: `⚠️ 키워드 "${keyword}"는 아직 등록되지 않았습니다. "새 단어 제안하기" 양식을 사용해 주세요.`
+              });
+              return;
+            }
+
+            if (!existingFile && isAliasDetachRequest) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `⚠️ 키워드 "${keyword}"가 존재하지 않습니다.`
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed'
               });
               return;
             }
