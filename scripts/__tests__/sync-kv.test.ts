@@ -512,4 +512,50 @@ describe("incrementalKvEntries alias awareness", () => {
     expect(result.upsert).toEqual([]);
     expect(result.delete.sort()).toEqual(["gold", "golden"]);
   });
+
+  it("alias added when canonical does not exist: deletes alias key to clear stale entry", async () => {
+    const { dir, commitSha } = createTempGitRepo({});
+    const filePath = join(dir, "data/_en/orphan.json");
+    mkdirSync(join(filePath, ".."), { recursive: true });
+    writeFileSync(filePath, JSON.stringify({ keyword: "orphan", alias_of: "nonexistent", created: "2026-04-14" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "add orphan alias"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete).toEqual(["orphan"]);
+  });
+
+  it("alias modified to point to nonexistent canonical: deletes alias key to clear stale entry", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/gold.json": { keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" },
+      "data/_en/golden.json": { keyword: "golden", alias_of: "gold", created: "2026-04-14" },
+    });
+    // Change alias_of to a canonical that doesn't exist
+    writeFileSync(join(dir, "data/_en/golden.json"), JSON.stringify({ keyword: "golden", alias_of: "nonexistent", created: "2026-04-14" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "change alias target to nonexistent"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    expect(result.upsert).toEqual([]);
+    expect(result.delete).toEqual(["golden"]);
+  });
+
+  it("alias renamed to point to nonexistent canonical: deletes both old and new alias key", async () => {
+    const { dir, commitSha } = createTempGitRepo({
+      "data/_en/gold.json": { keyword: "gold", url: "https://example.com/gold", created: "2026-04-14" },
+      "data/_en/golden.json": { keyword: "golden", alias_of: "gold", created: "2026-04-14" },
+    });
+    const { renameSync } = await import("fs");
+    // Rename the file and update alias_of to nonexistent
+    renameSync(join(dir, "data/_en/golden.json"), join(dir, "data/_en/gilded.json"));
+    writeFileSync(join(dir, "data/_en/gilded.json"), JSON.stringify({ keyword: "gilded", alias_of: "nonexistent", created: "2026-04-14" }));
+    git(["add", "."], dir);
+    git(["commit", "-m", "rename alias with bad canonical"], dir);
+
+    const result = await incrementalKvEntries(dir, commitSha);
+    // old keyword "golden" is deleted, new keyword "gilded" is also deleted (unresolvable)
+    expect(result.delete.sort()).toEqual(["gilded", "golden"]);
+    expect(result.upsert).toEqual([]);
+  });
 });

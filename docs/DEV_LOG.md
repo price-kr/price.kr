@@ -4,7 +4,31 @@
 
 ---
 
-## 2026-04-13 ~16:30 — Sync action wrangler install fix
+## 2026-04-14 ~04:30 — incrementalKvEntries: O(files+changes) index precompute + stale alias delete
+
+**작업 내용:**
+PR 리뷰 지적 사항 반영. `incrementalKvEntries` 함수에서 canonical 변경 시 마다 `findAliasesOf()` (전체 디렉토리 스캔)를 반복 호출하고, alias 변경 시마다 `findJsonFiles()` + JSON 파싱을 반복 수행하여 O(changes × totalFiles)가 되던 문제를 개선.
+
+**변경 파일:**
+- `scripts/sync-kv.ts` — 루프 전 `canonicalMap`(keyword→url) + `aliasIndex`(canonical→alias[]) 단일 스캔으로 인덱스 구축 후 O(1) 조회로 교체. alias A/M/R에서 canonical을 찾지 못할 경우 delete 발행(stale KV 항목 정리). `findJsonFiles`에 존재하지 않는 디렉토리 방어 처리 추가.
+- `scripts/__tests__/sync-kv.test.ts` — 신규 케이스 3건: alias 추가 시 canonical 없으면 delete, alias 수정 시 canonical 없으면 delete, alias rename 시 canonical 없으면 delete.
+- `docs/DEV_PROGRESS.md` — Phase 6 테이블 추가
+
+**기술적 결정:**
+
+### 1. 인덱스를 루프 전에 한 번만 구축
+- **결정:** `findJsonFiles(dataDir)` 호출을 루프 전으로 이동, 결과로 `canonicalMap`(Map<string,string>)과 `aliasIndex`(Map<string,string[]>)를 미리 구성
+- **이유:** canonical이 N개 수정되면 이전에는 N번 전체 스캔 발생 → O(N × F). 인덱스 1회 구축으로 O(F + N) 달성
+- **대안:** 파일별로 lazy 로딩 + 캐싱 — 구현 복잡도 대비 이득이 없음
+
+### 2. 미해소 alias에 delete 발행
+- **결정:** A/M/R에서 alias의 `alias_of`를 `canonicalMap`에서 찾지 못하면 upsert 대신 delete 발행
+- **이유:** 이전에는 아무 작업도 안 해 stale KV 항목이 남을 수 있었음. full sync와의 수렴성(convergence) 보장을 위해 delete 발행이 올바름
+- **대안:** 그냥 skip — 스테이일 항목 잔류로 full/incremental sync 결과 불일치 발생
+
+---
+
+
 
 **작업 내용:**
 GitHub Actions에서 KV namespace 조회 시 "KV not found"로 실패하던 문제 수정. workflow가 `tsx` 기반 스크립트로 바뀐 뒤에도 로컬 설치 의존성을 가정하고 있었는데, 실제 runner에서는 `wrangler` CLI가 전역으로 준비되지 않아 KV 명령 실행이 실패할 수 있어 설치 스텝을 복원.

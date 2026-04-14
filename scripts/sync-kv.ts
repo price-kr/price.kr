@@ -94,6 +94,24 @@ export async function incrementalKvEntries(
     } catch { /* skip */ }
   }
 
+  // Build canonical map and alias index from current disk state (one-time scan)
+  const allDiskFiles = await findJsonFiles(dataDir);
+  const canonicalMap = new Map<string, string>(); // keyword → url
+  const aliasIndex = new Map<string, string[]>(); // canonicalKeyword → [aliasKeywords]
+  for (const file of allDiskFiles) {
+    try {
+      const content = await readFile(file, "utf-8");
+      const data = JSON.parse(content);
+      if (isCanonicalData(data)) {
+        canonicalMap.set(data.keyword, data.url);
+      } else if (isAliasData(data)) {
+        const list = aliasIndex.get(data.alias_of) ?? [];
+        list.push(data.keyword);
+        aliasIndex.set(data.alias_of, list);
+      }
+    } catch { /* skip */ }
+  }
+
   for (const change of changes) {
     if (change.status === "A" || change.status === "M") {
       const fullPath = join(repoDir, change.file);
@@ -104,21 +122,16 @@ export async function incrementalKvEntries(
         if (isCanonicalData(data)) {
           upsert.push({ key: data.keyword, value: data.url });
           // Back-propagate new URL to all aliases of this canonical
-          const aliases = await findAliasesOf(data.keyword, dataDir);
-          for (const aliasKeyword of aliases) {
+          for (const aliasKeyword of aliasIndex.get(data.keyword) ?? []) {
             upsert.push({ key: aliasKeyword, value: data.url });
           }
         } else if (isAliasData(data)) {
-          // Resolve canonical URL from data directory
-          const allFiles = await findJsonFiles(dataDir);
-          for (const f of allFiles) {
-            try {
-              const c = JSON.parse(await readFile(f, "utf-8"));
-              if (isCanonicalData(c) && c.keyword === data.alias_of) {
-                upsert.push({ key: data.keyword, value: c.url });
-                break;
-              }
-            } catch { /* skip */ }
+          const url = canonicalMap.get(data.alias_of);
+          if (url !== undefined) {
+            upsert.push({ key: data.keyword, value: url });
+          } else {
+            // Canonical not found; remove any stale KV entry for this alias
+            deleteKeys.push(data.keyword);
           }
         }
       } catch {
@@ -137,7 +150,7 @@ export async function incrementalKvEntries(
           const aliasesFromDiff = [...deletedAliasKeywords.entries()]
             .filter(([, alias_of]) => alias_of === data.keyword)
             .map(([keyword]) => keyword);
-          const aliasesFromDisk = await findAliasesOf(data.keyword, dataDir);
+          const aliasesFromDisk = aliasIndex.get(data.keyword) ?? [];
           const allAliases = [...new Set([...aliasesFromDiff, ...aliasesFromDisk])];
           deleteKeys.push(...allAliases);
         } else if (isAliasData(data)) {
@@ -169,15 +182,12 @@ export async function incrementalKvEntries(
           if (isCanonicalData(data)) {
             upsert.push({ key: data.keyword, value: data.url });
           } else if (isAliasData(data)) {
-            const allFiles = await findJsonFiles(dataDir);
-            for (const f of allFiles) {
-              try {
-                const c = JSON.parse(await readFile(f, "utf-8"));
-                if (isCanonicalData(c) && c.keyword === data.alias_of) {
-                  upsert.push({ key: data.keyword, value: c.url });
-                  break;
-                }
-              } catch { /* skip */ }
+            const url = canonicalMap.get(data.alias_of);
+            if (url !== undefined) {
+              upsert.push({ key: data.keyword, value: url });
+            } else {
+              // Canonical not found; remove any stale KV entry for this alias
+              deleteKeys.push(data.keyword);
             }
           }
         } catch {
@@ -209,6 +219,7 @@ export async function writeDiffJsonl(
 }
 
 async function findJsonFiles(dir: string): Promise<string[]> {
+  if (!existsSync(dir)) return [];
   const results: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
