@@ -78,4 +78,26 @@ describe("loadAllKeywords", () => {
     expect(keywords).toHaveLength(1);
     expect(keywords[0].keyword).toBe("valid");
   });
+
+  it("resolves aliases to canonical URLs", async () => {
+    const tmp = createTmpDir();
+    mkdirSync(join(tmp, "ㄱ", "금"), { recursive: true });
+    writeFileSync(
+      join(tmp, "ㄱ", "금", "금값.json"),
+      JSON.stringify({ keyword: "금값", url: "https://gold.com", created: "2026-04-14" })
+    );
+    writeFileSync(
+      join(tmp, "ㄱ", "금", "금.json"),
+      JSON.stringify({ keyword: "금", alias_of: "금값", created: "2026-04-14" })
+    );
+
+    const keywords = await loadAllKeywords(tmp);
+    expect(keywords).toHaveLength(2);
+
+    const gold = keywords.find(k => k.keyword === "금");
+    const goldPrice = keywords.find(k => k.keyword === "금값");
+
+    expect(goldPrice?.url).toBe("https://gold.com");
+    expect(gold?.url).toBe("https://gold.com");
+  });
 });

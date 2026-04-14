@@ -95,7 +95,7 @@ export async function incrementalKvEntries(
   }
 
   // Build canonical map and alias index from current disk state (one-time scan)
-  const allDiskFiles = await findJsonFiles(dataDir);
+  const allDiskFiles = existsSync(dataDir) ? await findJsonFiles(dataDir) : [];
   const canonicalMap = new Map<string, string>(); // keyword → url
   const aliasIndex = new Map<string, string[]>(); // canonicalKeyword → [aliasKeywords]
   for (const file of allDiskFiles) {
@@ -181,6 +181,10 @@ export async function incrementalKvEntries(
           const data = JSON.parse(content);
           if (isCanonicalData(data)) {
             upsert.push({ key: data.keyword, value: data.url });
+            // Also update aliases if canonical moved/changed
+            for (const aliasKeyword of aliasIndex.get(data.keyword) ?? []) {
+              upsert.push({ key: aliasKeyword, value: data.url });
+            }
           } else if (isAliasData(data)) {
             const url = canonicalMap.get(data.alias_of);
             if (url !== undefined) {

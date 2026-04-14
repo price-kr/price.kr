@@ -1,0 +1,24 @@
+name: "유사어 등록 요청"
+description: "기존 키워드의 유사어(다른 이름)를 등록합니다"
+labels: ["keyword-alias"]
+body:
+  - type: input
+    id: alias_keyword
+    attributes:
+      label: "유사어 키워드"
+      description: "등록할 유사어 (예: 금)"
+    validations:
+      required: true
+  - type: input
+    id: canonical_keyword
+    attributes:
+      label: "연결할 기존 키워드"
+      description: "이미 등록된 키워드 (예: 금값)"
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: "등록 이유"
+    validations:
+      required: false
