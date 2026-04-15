@@ -50,3 +50,33 @@ export function isBlockedKeyword(
 
   return false;
 }
+
+export interface AliasData {
+  keyword: string;
+  alias_of: string;
+}
+
+export interface CanonicalData {
+  keyword: string;
+  url: string;
+}
+
+export function isAliasData(data: unknown): data is AliasData {
+  if (typeof data !== "object" || data === null) return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.keyword === "string" &&
+    typeof d.alias_of === "string" &&
+    typeof d.url === "undefined"
+  );
+}
+
+export function isCanonicalData(data: unknown): data is CanonicalData {
+  if (typeof data !== "object" || data === null) return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.keyword === "string" &&
+    typeof d.url === "string" &&
+    typeof d.alias_of === "undefined"
+  );
+}

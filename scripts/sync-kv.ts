@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile } from "fs/promises";
 import { join, basename } from "path";
 import { existsSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";
+import { isAliasData, isCanonicalData } from "./validate-keyword.js";
 
 export interface KvEntry {
   key: string;
@@ -75,6 +76,41 @@ export async function incrementalKvEntries(
   const changes = parseGitDiffNameStatus(diffOutput);
   const upsert: KvEntry[] = [];
   const deleteKeys: string[] = [];
+  const dataDir = join(repoDir, "data");
+
+  // Pre-pass: collect keywords of all D-alias files from git history
+  const deletedAliasKeywords = new Map<string, string>(); // aliasKeyword → alias_of
+  for (const change of changes) {
+    if (change.status !== "D") continue;
+    try {
+      const oldContent = execFileSync(
+        "git", ["show", `${lastCommit}:${change.file}`],
+        { cwd: repoDir, encoding: "utf-8" }
+      );
+      const data = JSON.parse(oldContent);
+      if (isAliasData(data)) {
+        deletedAliasKeywords.set(data.keyword, data.alias_of);
+      }
+    } catch { /* skip */ }
+  }
+
+  // Build canonical map and alias index from current disk state (one-time scan)
+  const allDiskFiles = existsSync(dataDir) ? await findJsonFiles(dataDir) : [];
+  const canonicalMap = new Map<string, string>(); // keyword → url
+  const aliasIndex = new Map<string, string[]>(); // canonicalKeyword → [aliasKeywords]
+  for (const file of allDiskFiles) {
+    try {
+      const content = await readFile(file, "utf-8");
+      const data = JSON.parse(content);
+      if (isCanonicalData(data)) {
+        canonicalMap.set(data.keyword, data.url);
+      } else if (isAliasData(data)) {
+        const list = aliasIndex.get(data.alias_of) ?? [];
+        list.push(data.keyword);
+        aliasIndex.set(data.alias_of, list);
+      }
+    } catch { /* skip */ }
+  }
 
   for (const change of changes) {
     if (change.status === "A" || change.status === "M") {
@@ -83,8 +119,20 @@ export async function incrementalKvEntries(
       try {
         const content = await readFile(fullPath, "utf-8");
         const data = JSON.parse(content);
-        if (typeof data.keyword === "string" && typeof data.url === "string") {
+        if (isCanonicalData(data)) {
           upsert.push({ key: data.keyword, value: data.url });
+          // Back-propagate new URL to all aliases of this canonical
+          for (const aliasKeyword of aliasIndex.get(data.keyword) ?? []) {
+            upsert.push({ key: aliasKeyword, value: data.url });
+          }
+        } else if (isAliasData(data)) {
+          const url = canonicalMap.get(data.alias_of);
+          if (url !== undefined) {
+            upsert.push({ key: data.keyword, value: url });
+          } else {
+            // Canonical not found; remove any stale KV entry for this alias
+            deleteKeys.push(data.keyword);
+          }
         }
       } catch {
         console.warn(`Skipping malformed JSON: ${change.file}`);
@@ -96,7 +144,16 @@ export async function incrementalKvEntries(
           { cwd: repoDir, encoding: "utf-8" }
         );
         const data = JSON.parse(oldContent);
-        if (typeof data.keyword === "string") {
+        if (isCanonicalData(data)) {
+          deleteKeys.push(data.keyword);
+          // Collect aliases from: (a) deleted in same diff, (b) still on disk
+          const aliasesFromDiff = [...deletedAliasKeywords.entries()]
+            .filter(([, alias_of]) => alias_of === data.keyword)
+            .map(([keyword]) => keyword);
+          const aliasesFromDisk = aliasIndex.get(data.keyword) ?? [];
+          const allAliases = [...new Set([...aliasesFromDiff, ...aliasesFromDisk])];
+          deleteKeys.push(...allAliases);
+        } else if (isAliasData(data)) {
           deleteKeys.push(data.keyword);
         }
       } catch {
@@ -122,8 +179,20 @@ export async function incrementalKvEntries(
         try {
           const content = await readFile(fullPath, "utf-8");
           const data = JSON.parse(content);
-          if (typeof data.keyword === "string" && typeof data.url === "string") {
+          if (isCanonicalData(data)) {
             upsert.push({ key: data.keyword, value: data.url });
+            // Also update aliases if canonical moved/changed
+            for (const aliasKeyword of aliasIndex.get(data.keyword) ?? []) {
+              upsert.push({ key: aliasKeyword, value: data.url });
+            }
+          } else if (isAliasData(data)) {
+            const url = canonicalMap.get(data.alias_of);
+            if (url !== undefined) {
+              upsert.push({ key: data.keyword, value: url });
+            } else {
+              // Canonical not found; remove any stale KV entry for this alias
+              deleteKeys.push(data.keyword);
+            }
           }
         } catch {
           console.warn(`Skipping malformed JSON: ${change.file}`);
@@ -154,6 +223,7 @@ export async function writeDiffJsonl(
 }
 
 async function findJsonFiles(dir: string): Promise<string[]> {
+  if (!existsSync(dir)) return [];
   const results: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -167,20 +237,59 @@ async function findJsonFiles(dir: string): Promise<string[]> {
   return results;
 }
 
-export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {
+export async function findAliasesOf(canonicalKeyword: string, dataDir: string): Promise<string[]> {
   const files = await findJsonFiles(dataDir);
-  const entries: KvEntry[] = [];
-
+  const aliases: string[] = [];
   for (const file of files) {
     try {
       const content = await readFile(file, "utf-8");
       const data = JSON.parse(content);
-      if (data && typeof data.keyword === "string" && typeof data.url === "string") {
-        entries.push({ key: data.keyword, value: data.url });
+      if (isAliasData(data) && data.alias_of === canonicalKeyword) {
+        aliases.push(data.keyword);
       }
     } catch {
-      console.warn(`Skipping malformed JSON: ${file}`);
+      // skip malformed
     }
+  }
+  return aliases;
+}
+
+export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {
+  const files = await findJsonFiles(dataDir);
+  const canonicalMap = new Map<string, string>(); // keyword → url
+  const pendingAliases: Array<{ keyword: string; alias_of: string }> = [];
+
+  // 1st pass: collect canonicals and separate aliases
+  for (const file of files) {
+      try {
+          const content = await readFile(file, "utf-8");
+          const data = JSON.parse(content);
+          if (isCanonicalData(data)) {
+              canonicalMap.set(data.keyword, data.url);
+          } else if (isAliasData(data)) {
+              pendingAliases.push({ keyword: data.keyword, alias_of: data.alias_of });
+          }
+      } catch {
+          console.warn(`Skipping malformed JSON: ${file}`);
+      }
+  }
+
+  const entries: KvEntry[] = [];
+
+  // Add all canonicals first
+  for (const [keyword, url] of canonicalMap) {
+      entries.push({ key: keyword, value: url });
+  }
+
+  // 2nd pass: resolve aliases to canonical URLs
+  // Chains are forbidden: alias_of must point directly to a canonical, not another alias
+  for (const { keyword, alias_of } of pendingAliases) {
+    const url = canonicalMap.get(alias_of);
+    if (url === undefined) {
+      console.warn(`Skipping alias "${keyword}": canonical "${alias_of}" not found or is itself an alias`);
+      continue;
+    }
+    entries.push({ key: keyword, value: url });
   }
 
   return entries;
@@ -190,7 +299,6 @@ export async function buildKvEntries(dataDir: string): Promise<KvEntry[]> {
 
 const SYNC_COMMIT_KEY = "__sync_commit__";
 const BULK_CHUNK_SIZE = 10_000;
-
 export function buildBulkPutArgs(namespaceId: string, tmpFile: string): string[] {
   return ["wrangler", "kv", "bulk", "put", "--remote", `--namespace-id=${namespaceId}`, tmpFile];
 }

@@ -1,4 +1,4 @@
-import punycode from "punycode";
+import punycode from "punycode/";
 
 export function extractSubdomain(
   host: string,
@@ -14,13 +14,27 @@ export function extractSubdomain(
 
   const sub = hostWithoutPort.slice(0, -suffix.length);
 
-  // Decode punycode using well-tested npm package
-  // Note: toUnicode is lenient — returns original string if decoding fails
-  // Invalid subdomains will simply miss in KV lookup → redirect to web app
-  const decoded = punycode.toUnicode(sub);
+  // Decode punycode using the userland module by adding a trailing slash
+  let decoded: string;
+  try {
+    const punycodeInput = sub.toLowerCase();
+    decoded = punycode.toUnicode(punycodeInput);
+  } catch (e) {
+    // If punycode decoding fails, treat the original subdomain as invalid
+    console.warn(`Punycode decoding failed for "${sub}":`, e);
+    return null;
+  }
+  
+  // Apply toLowerCase() after decoding as well, in case decoding results in mixed case.
+  decoded = decoded.toLowerCase();
 
-  // Reject www and multi-level subdomains (check after decode to catch Unicode dot separators)
-  if (decoded === "www" || decoded.includes(".")) return null;
+  // Reject www, empty string, multi-level subdomains, and invalid characters
+  // Valid characters for keywords/subdomains: Korean syllables, Hangul consonant Jamo, alphanumeric, hyphen
+  const validSubdomainRegex = /^[가-힣ㄱ-ㅎa-z0-9]+(?:-[가-힣ㄱ-ㅎa-z0-9]+)*$/;
+
+  if (decoded === "www" || decoded === "" || decoded.includes(".") || !validSubdomainRegex.test(decoded)) {
+    return null;
+  }
 
   return decoded;
 }

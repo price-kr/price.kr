@@ -19,7 +19,10 @@ jobs:
         github.event.action == 'labeled' &&
         (
           github.event.label.name == 'keyword-proposal' ||
-          github.event.label.name == 'keyword-change'
+          github.event.label.name == 'keyword-change' ||
+          github.event.label.name == 'keyword-alias' ||
+          github.event.label.name == 'keyword-alias-detach' ||
+          github.event.label.name == 'keyword-delete'
         )
       )
     runs-on: ubuntu-latest
@@ -77,15 +80,22 @@ jobs:
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
 
             // Parse form fields
-            const keywordMatch = body.match(/### (?:키워드|변경할 키워드)\s*\n\s*(.+)/);
-            const urlMatch = body.match(/### 목적지 URL\s*\n\s*(.+)/) || body.match(/### 새로운 URL\s*\n\s*(.+)/);
+            const keywordMatch = body.match(/### (?:키워드|변경할 키워드|유사어 키워드|해제할 유사어 키워드|삭제할 키워드)\s*\n\s*(.+)/);
+            const urlMatch = body.match(/### 목적지 URL\s*\n\s*(.+)/) || body.match(/### 새로운 URL\s*\n\s*(.+)/) || body.match(/### 새로운 목적지 URL\s*\n\s*(.+)/);
+            const canonicalMatch = body.match(/### 연결할 기존 키워드\s*\n\s*(.+)/);
 
-            if (!keywordMatch || !urlMatch) {
+            const keyword = keywordMatch ? keywordMatch[1].trim() : '';
+            const url = urlMatch ? urlMatch[1].trim() : '';
+            const canonical = canonicalMatch ? canonicalMatch[1].trim() : '';
+            const currentLabel = context.payload.label?.name || '';
+            const requiresCanonical = currentLabel === 'keyword-alias';
+
+            if (!keyword || (requiresCanonical && !canonical)) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: '❌ 키워드 또는 URL을 파싱할 수 없습니다. 양식을 확인해 주세요.'
+                body: '❌ 필요한 정보를 파싱할 수 없습니다. 양식을 확인해 주세요.'
               });
               await github.rest.issues.update({
                 owner: context.repo.owner,
@@ -96,30 +106,47 @@ jobs:
               return;
             }
 
-            const keyword = keywordMatch[1].trim();
-            const url = urlMatch[1].trim();
-
             core.setOutput('keyword', keyword);
             core.setOutput('url', url);
+            core.setOutput('canonical', canonical);
 
       - name: Validate keyword and URL
         id: validate
-        if: steps.parse.outputs.keyword
+        if: steps.parse.outputs.keyword || steps.parse.outputs.canonical
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           KEYWORD: ${{ steps.parse.outputs.keyword }}
           URL_INPUT: ${{ steps.parse.outputs.url }}
+          CANONICAL: ${{ steps.parse.outputs.canonical }}
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
+          LABELS: ${{ steps.context.outputs.labels }}
           GOOGLE_SAFE_BROWSING_API_KEY: ${{ secrets.GOOGLE_SAFE_BROWSING_API_KEY }}
         with:
           script: |
             const keyword = process.env.KEYWORD;
             const url = process.env.URL_INPUT;
+            const canonical = process.env.CANONICAL;
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
             const fs = require('fs');
+            const labels = JSON.parse(process.env.LABELS || '[]');
+
+            // Helper: compute file path
+            const getFilePath = (k) => {
+              const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+              const first = k[0];
+              const code = first.charCodeAt(0);
+              if (code >= 0xAC00 && code <= 0xD7A3) {
+                const cho = CHOSEONG[Math.floor((code - 0xAC00) / 588)];
+                return `data/${cho}/${first}/${k}.json`;
+              } else if (/\d/.test(first)) {
+                return `data/_num/${k}.json`;
+              } else {
+                return `data/_en/${k.toLowerCase()}.json`;
+              }
+            };
 
             // Validate keyword contains only allowed characters (Korean, English, digits)
-            if (!/^[가-힣ㄱ-ㅎa-zA-Z0-9]+$/.test(keyword)) {
+            if (keyword && !/^[가-힣ㄱ-ㅎa-zA-Z0-9]+$/.test(keyword)) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -152,8 +179,8 @@ jobs:
             }).join('');
             const isJamoOnly = (s) => [...s].every(ch => JAMO_SET.has(ch));
 
-            const normalized = normalize(keyword);
-            let isBlocked = blocklist.some(b => normalize(b) === normalized);
+            const normalized = keyword ? normalize(keyword) : '';
+            let isBlocked = normalized ? blocklist.some(b => normalize(b) === normalized) : false;
             // Jamo bypass check: "ㅋㅍ" should match "쿠팡"
             if (!isBlocked && isJamoOnly(normalized)) {
               isBlocked = blocklist.some(b => extractCho(normalize(b)) === normalized);
@@ -187,23 +214,53 @@ jobs:
               return;
             }
 
-            // Validate URL format
-            try {
-              new URL(url);
-            } catch {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: '❌ 유효하지 않은 URL 형식입니다.'
-              });
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                state: 'closed'
-              });
-              return;
+            // Alias-specific validation
+            if (labels.includes('keyword-alias')) {
+              if (!canonical) {
+                core.setFailed('Canonical keyword missing for alias request');
+                return;
+              }
+              const canonicalPath = getFilePath(canonical);
+              if (!fs.existsSync(canonicalPath)) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `❌ 연결할 키워드 "${canonical}"가 존재하지 않습니다.`
+                });
+                return;
+              }
+              const canonicalData = JSON.parse(fs.readFileSync(canonicalPath, 'utf-8'));
+              if (canonicalData.alias_of) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `❌ "${canonical}"은 이미 유사어입니다. 유사어의 유사어(Chain)는 등록할 수 없습니다.`
+                });
+                return;
+              }
+            }
+
+            // Validate URL format if provided
+            if (url) {
+              try {
+                new URL(url);
+              } catch {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: '❌ 유효하지 않은 URL 형식입니다.'
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  state: 'closed'
+                });
+                return;
+              }
             }
 
             // Whitelist check (loaded from data/whitelist.json for PR-based management)
@@ -221,8 +278,8 @@ jobs:
               return;
             }
 
-            const urlObj = new URL(url);
-            const domainAllowed = allowedDomains.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d));
+            const urlObj = url ? new URL(url) : null;
+            const domainAllowed = urlObj ? allowedDomains.some(d => urlObj.hostname === d || urlObj.hostname.endsWith('.' + d)) : true;
 
             if (!domainAllowed) {
               await github.rest.issues.createComment({
@@ -237,7 +294,7 @@ jobs:
 
             // Google Safe Browsing API check
             const safeBrowsingKey = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
-            if (safeBrowsingKey) {
+            if (url && safeBrowsingKey) {
               try {
                 const sbResponse = await fetch(
                   `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${safeBrowsingKey}`,
@@ -284,12 +341,14 @@ jobs:
         env:
           KEYWORD: ${{ steps.parse.outputs.keyword }}
           URL_INPUT: ${{ steps.parse.outputs.url }}
+          CANONICAL: ${{ steps.parse.outputs.canonical }}
           ISSUE_NUMBER: ${{ steps.context.outputs.issue_number }}
           LABELS: ${{ steps.context.outputs.labels }}
         with:
           script: |
             const keyword = process.env.KEYWORD;
-            const url = process.env.URL_INPUT;
+            let url = process.env.URL_INPUT;
+            const canonical = process.env.CANONICAL;
             const issueNumber = parseInt(process.env.ISSUE_NUMBER);
             const labels = JSON.parse(process.env.LABELS || '[]');
             const fs = require('fs');
@@ -303,20 +362,22 @@ jobs:
             });
             const shouldReopenIssue = issue.state === 'closed';
 
-            // Compute file path
-            const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-            const first = keyword[0];
-            const code = first.charCodeAt(0);
-            let filePath;
+            // Helper: compute file path
+            const getFilePath = (k) => {
+              const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+              const first = k[0];
+              const code = first.charCodeAt(0);
+              if (code >= 0xAC00 && code <= 0xD7A3) {
+                const cho = CHOSEONG[Math.floor((code - 0xAC00) / 588)];
+                return `data/${cho}/${first}/${k}.json`;
+              } else if (/\d/.test(first)) {
+                return `data/_num/${k}.json`;
+              } else {
+                return `data/_en/${k.toLowerCase()}.json`;
+              }
+            };
 
-            if (code >= 0xAC00 && code <= 0xD7A3) {
-              const cho = CHOSEONG[Math.floor((code - 0xAC00) / 588)];
-              filePath = `data/${cho}/${first}/${keyword}.json`;
-            } else if (/\d/.test(first)) {
-              filePath = `data/_num/${keyword}.json`;
-            } else {
-              filePath = `data/_en/${keyword.toLowerCase()}.json`;
-            }
+            const filePath = getFilePath(keyword);
 
             // Check if keyword already exists in repo (duplicate detection)
             let existingFile;
@@ -330,8 +391,21 @@ jobs:
             } catch {}
 
             const isChangeRequest = labels.includes('keyword-change');
+            const isAliasRequest = labels.includes('keyword-alias');
+            const isAliasDetachRequest = labels.includes('keyword-alias-detach');
+            const isDeleteRequest = labels.includes('keyword-delete');
 
-            if (existingFile && !isChangeRequest) {
+            if (isAliasRequest) {
+              if (existingFile) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `⚠️ 키워드 "${keyword}"는 이미 등록되어 있습니다.`
+                });
+                return;
+              }
+            } else if (existingFile && !isChangeRequest && !isDeleteRequest && !isAliasDetachRequest) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -351,9 +425,55 @@ jobs:
               return;
             }
 
+            if (!existingFile && isAliasDetachRequest) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `⚠️ 키워드 "${keyword}"가 존재하지 않습니다.`
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed'
+              });
+              return;
+            }
+
+            // Handle Alias in Change Request
+            let targetFilePath = filePath;
+            let targetKeyword = keyword;
+            let commentInfo = "";
+            if (isChangeRequest && existingFile) {
+              const fileData = JSON.parse(Buffer.from(existingFile.data.content, 'base64').toString('utf-8'));
+              if (fileData.alias_of) {
+                targetKeyword = fileData.alias_of;
+                targetFilePath = getFilePath(targetKeyword);
+                try {
+                  existingFile = await github.rest.repos.getContent({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    path: targetFilePath,
+                    ref: 'main'
+                  });
+                } catch {}
+                commentInfo = `ℹ️ "${keyword}"은 "${targetKeyword}"의 유사어입니다. "${targetKeyword}"의 URL을 변경하는 PR을 생성합니다.`;
+              }
+            }
+
             // Normalize English keywords to lowercase to match filename
-            const normalizedKeyword = /^[a-zA-Z]/.test(keyword) ? keyword.toLowerCase() : keyword;
-            const content = JSON.stringify({ keyword: normalizedKeyword, url, created: new Date().toISOString().split('T')[0] }, null, 2) + '\n';
+            const normalizedKeyword = /^[a-zA-Z]/.test(targetKeyword) ? targetKeyword.toLowerCase() : targetKeyword;
+            const normalizedCanonical = /^[a-zA-Z]/.test(canonical) ? canonical.toLowerCase() : canonical;
+            let content;
+            if (isAliasRequest) {
+              content = JSON.stringify({ keyword: normalizedKeyword, alias_of: normalizedCanonical, created: new Date().toISOString().split('T')[0] }, null, 2) + '\n';
+            } else if (isDeleteRequest) {
+              content = null; // Delete action
+            } else {
+              content = JSON.stringify({ keyword: normalizedKeyword, url, created: new Date().toISOString().split('T')[0] }, null, 2) + '\n';
+            }
+
             // Sanitize branch name: use issue number for safety
             const branch = `keyword/issue-${issueNumber}`;
 
@@ -392,19 +512,96 @@ jobs:
               }
             }
 
-            // Create or update file (pass sha for updates to avoid 409 conflict)
-            const fileParams = {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              path: filePath,
-              message: isChangeRequest ? `feat: update keyword "${keyword}" URL` : `feat: add keyword "${keyword}"`,
-              content: Buffer.from(content).toString('base64'),
-              branch: branch
-            };
-            if (existingFile && existingFile.data?.sha) {
-              fileParams.sha = existingFile.data.sha;
+            // Create or update file
+            if (isDeleteRequest) {
+              if (!existingFile || !existingFile.data) {
+                const missingKeywordMessage = `❌ 삭제할 키워드 "${keyword}"를 main 브랜치에서 찾을 수 없습니다. 존재하지 않는 키워드는 삭제할 수 없습니다.`;
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: missingKeywordMessage
+                });
+
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  state: 'closed'
+                });
+
+                return;
+              }
+
+              // Handle cascading delete for canonical
+              const fileData = JSON.parse(Buffer.from(existingFile.data.content, 'base64').toString('utf-8'));
+              const isCanonical = !fileData.alias_of;
+
+              // Delete the target file
+              await github.rest.repos.deleteFile({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: filePath,
+                message: `feat: delete keyword "${keyword}"`,
+                sha: existingFile.data.sha,
+                branch: branch
+              });
+
+              if (isCanonical) {
+                // Find all aliases pointing to this canonical and delete them
+                const glob = require('@actions/glob');
+                const globber = await glob.create('data/**/*.json');
+                const files = await globber.glob();
+                let deletedAliases = [];
+
+                for (const file of files) {
+                  try {
+                    const content = JSON.parse(fs.readFileSync(file, 'utf-8'));
+                    if (content.alias_of === keyword) {
+                      const aliasKeyword = content.keyword;
+                      const relativePath = path.relative(process.cwd(), file);
+
+                      // Get SHA for the alias file
+                      const { data: aliasFile } = await github.rest.repos.getContent({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        path: relativePath,
+                        ref: 'main'
+                      });
+
+                      await github.rest.repos.deleteFile({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        path: relativePath,
+                        message: `feat: cascading delete alias "${aliasKeyword}" for canonical "${keyword}"`,
+                        sha: aliasFile.sha,
+                        branch: branch
+                      });
+                      deletedAliases.push(aliasKeyword);
+                    }
+                  } catch (e) {
+                    console.error(`Failed to process ${file} for cascading delete:`, e.message);
+                  }
+                }
+                if (deletedAliases.length > 0) {
+                  commentInfo = `⚠️ "${keyword}"에 연결된 유사어가 있습니다: ${deletedAliases.join(', ')}\n원본 키워드와 함께 모든 유사어도 삭제하는 PR을 생성했습니다.`;
+                }
+              }
+            } else {
+              const fileParams = {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: targetFilePath,
+                message: isChangeRequest ? `feat: update keyword "${targetKeyword}" URL` : `feat: add keyword "${targetKeyword}"`,
+                content: Buffer.from(content).toString('base64'),
+                branch: branch
+              };
+              if (existingFile && existingFile.data?.sha) {
+                fileParams.sha = existingFile.data.sha;
+              }
+              await github.rest.repos.createOrUpdateFileContents(fileParams);
             }
-            await github.rest.repos.createOrUpdateFileContents(fileParams);
 
             // Check for existing PR
             const { data: existingPRs } = await github.rest.pulls.list({
@@ -415,10 +612,26 @@ jobs:
             });
 
             let pr;
-            const prTitle = isChangeRequest ? `[키워드 변경] ${keyword}` : `[키워드 등록] ${keyword}`;
-            const prHeading = isChangeRequest ? '키워드 변경 제안' : '키워드 등록 제안';
-            const voteThreshold = isChangeRequest ? 5 : 3;
-            const prBody = `## ${prHeading}\n\n- **키워드:** \`${keyword}\`\n- **URL:** \`${url}\`\n- **제안 Issue:** Fixes #${issueNumber}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\nPR 생성 후 24시간이 지난다음 찬성이 ${voteThreshold}개 이상이 만족되면 자동 병합됩니다.`;
+            let prTitle, prHeading, voteThreshold;
+            if (isAliasRequest) {
+              prTitle = `[유사어 등록] ${keyword} → ${canonical}`;
+              prHeading = '유사어 등록 제안';
+              voteThreshold = 3;
+            } else if (isAliasDetachRequest) {
+              prTitle = `[유사어 해제] ${keyword}`;
+              prHeading = '유사어 해제 제안';
+              voteThreshold = 3;
+            } else if (isDeleteRequest) {
+              prTitle = `[키워드 삭제] ${keyword}`;
+              prHeading = '키워드 삭제 제안';
+              voteThreshold = 3;
+            } else {
+              prTitle = isChangeRequest ? `[키워드 변경] ${targetKeyword}` : `[키워드 등록] ${targetKeyword}`;
+              prHeading = isChangeRequest ? '키워드 변경 제안' : '키워드 등록 제안';
+              voteThreshold = isChangeRequest ? 5 : 3;
+            }
+
+            const prBody = `## ${prHeading}\n\n- **키워드:** \`${keyword}\`\n${url ? `- **URL:** \`${url}\`\n` : ''}${canonical ? `- **연결 대상:** \`${canonical}\`\n` : ''}- **제안 Issue:** Fixes #${issueNumber}\n\n---\n\n투표해 주세요! 👍 찬성 / 👎 반대\n\nPR 생성 후 24시간이 지난다음 찬성이 ${voteThreshold}개 이상이 만족되면 자동 병합됩니다.`;
 
             if (existingPRs.length > 0) {
               pr = await github.rest.pulls.update({
@@ -443,9 +656,9 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: existingPRs.length > 0
+              body: (commentInfo ? commentInfo + '\n\n' : '') + (existingPRs.length > 0
                 ? `✅ 유효성 검증 통과! PR이 업데이트되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 ${voteThreshold}개 이상, PR 생성 후 24시간이 지나면 투표결과에 따라 자동 병합됩니다.`
-                : `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 ${voteThreshold}개 이상, PR 생성 후 24시간이 지나면 투표결과에 따라 자동 병합됩니다.`
+                : `✅ 유효성 검증 통과! PR이 생성되었습니다: #${pr.data.number}\n\n커뮤니티 투표를 기다립니다. 👍 찬성 ${voteThreshold}개 이상, PR 생성 후 24시간이 지나면 투표결과에 따라 자동 병합됩니다.`)
             });
 
             // Re-open issue only after PR is successfully created

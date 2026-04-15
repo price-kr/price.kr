@@ -1,8 +1,12 @@
-import { loadAllKeywords, getDataDir } from "@/lib/keywords";
+import { loadData, getDataDir } from "@/lib/keywords";
 import { SearchBar } from "@/components/SearchBar";
 
 export default async function HomePage() {
-  const keywords = await loadAllKeywords(getDataDir()).catch(() => []);
+  const dataDir = getDataDir();
+  const { keywords } = await loadData(dataDir).catch(() => ({ keywords: [] }));
+
+  // `loadData` already resolves aliases into `keywords`, so use only `keywords`
+  // here to avoid duplicate suggestions and duplicate React keys in SearchBar.
   const keywordList = keywords.map((k) => k.keyword);
 
   return (
