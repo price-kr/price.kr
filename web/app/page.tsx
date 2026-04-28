@@ -1,5 +1,6 @@
 import { loadData, getDataDir } from "@/lib/keywords";
 import { SearchBar } from "@/components/SearchBar";
+import { PageTracker } from "@/components/PageTracker";
 
 export default async function HomePage() {
   const dataDir = getDataDir();
@@ -11,6 +12,7 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
+      <PageTracker page="/" />
       <h1 className="text-4xl font-bold mb-2">가격.kr</h1>
       <p className="text-gray-600 mb-8 text-center">
         한글 키워드로 최저가를 찾아보세요

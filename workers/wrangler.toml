@@ -17,3 +17,10 @@ preview_id = "db8ad00cf73c4b7584dfa3c487fb2744"
 MAIN_DOMAIN = "xn--o39aom.kr"
 WEB_APP_ORIGIN = "https://xn--o39aom.kr"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/price-kr/price.kr/main"
+
+# D1 database for tracking events
+[[d1_databases]]
+binding = "TRACKING"
+database_name = "price-kr-tracking"
+database_id = "placeholder-tracking-db-id"
+migrations_dir = "migrations"

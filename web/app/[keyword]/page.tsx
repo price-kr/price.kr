@@ -2,6 +2,7 @@ import { loadData, getDataDir, loadKeywordFile } from "@/lib/keywords";
 import { searchKeywords } from "@/lib/hangul";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { PageTracker } from "@/components/PageTracker";
 
 interface Props {
   params: Promise<{ keyword: string }>;
@@ -149,6 +150,7 @@ export default async function KeywordPage({ params }: Props) {
   // --- Unregistered view (existing behavior) ---
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
+      <PageTracker page={`/${decoded}`} />
       <h1 className="text-3xl font-bold mb-4">
         <span className="text-blue-600">{decoded}</span> 키워드가 아직
         등록되지 않았습니다
