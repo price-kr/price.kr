@@ -18,8 +18,8 @@ export async function HeroStats({
   }
 
   return (
-    <div className="flex items-center gap-6 text-[13px] text-[var(--ink-mute)]">
-      <span>
+    <div data-hero-stats className="flex items-center gap-6 text-[13px] text-[var(--ink-mute)]">
+      <span data-stat-total>
         등록된 단어 <strong className="text-[var(--ink)]">{count.toLocaleString("ko-KR")}</strong>개
       </span>
       <span className="text-[var(--ink-ghost)]">·</span>

@@ -4,6 +4,76 @@
 
 ---
 
+## 2026-04-30 ~01:30 — Concept A hero 추가 리뷰 라운드 (iter 2–7) 반영
+
+**작업 내용:**
+`/loop` self-paced 검토 루프를 통해 6 라운드 추가 점검. 매 라운드 fresh agent 1–3개를 병렬 dispatch하여 확신도 높은 발견만 수정. "2회 연속 클린"에서 자동 종료. 누적 13건 수정.
+
+**iter 2 (3건):** AddressBar `clearing→typing` 200ms 지연, `role="button"` + `aria-hidden` 모순 제거, JetBrains Mono Google Fonts CDN, 모바일 `@media (max-width: 720px)` 이식 (data-attribute selector). *— iter 1에서 이미 커밋됨.*
+
+**iter 3 (4건):**
+- AddressBar onBlur가 `userActive=false` 상태에서도 자동 애니메이션 state를 리셋하던 버그 — `if (!userActive) return` guard.
+- layout.tsx — `fonts.googleapis.com` preconnect 누락 추가 (gstatic만 있던 상태).
+- globals.css 모바일 `@media` — `[data-bar-url]` 컨테이너 `font-size`가 자식 inline-style로 cascade되지 않던 문제 → `[data-bar-url] > span, > input` 자식 셀렉터로 교체.
+- page.tsx — `HeroStats`에 `totalKeywords={keywordList.length}` prop pass-through, `loadData()` 이중 walk 제거.
+
+**iter 4 (3건):**
+- AddressBar — `keywords=[]`일 때 `% 0 = NaN` 가드 (`currentKeyword` + `setKeywordIdx` 양쪽).
+- 미사용 `inputRef` + `useRef` import 제거.
+- user-active input에 `paddingRight: clamp(80px, 9vw, 130px)` — `.가격.kr` absolute 접미사가 입력 텍스트를 시각적으로 덮던 문제.
+
+**iter 5 (2건):**
+- globals.css — `[data-bar-shell]:has(input:focus-visible)` 키보드 포커스 링 (input의 `outline-none` 보완, WCAG 2.4.7). `data-bar-shell` 속성을 wrapper에 부여.
+- page.tsx — `<main overflow-hidden>` → `overflow-x-hidden`. 작은 뷰포트(≤320×568)에서 콘텐츠가 100vh 초과 시 스크롤 가능.
+
+**iter 6 (3건):**
+- globals.css — `input:focus-visible` 글로벌 스타일을 `[data-bar-shell] input:focus-visible`로 스코프 (orange accent ring이 SearchBar의 blue Tailwind ring으로 누출 방지).
+- page.tsx — eyebrow `<div>` → `<p className="m-0 ...">` (시맨틱).
+- page.tsx — 푸터 01/02/03 stepper `<div>/<span>` → `<ol aria-label="이용 단계"><li>x3</li></ol>` (`list-none`/`m-0`/`p-0`로 시각 동일).
+
+**iter 7 (1건):**
+- AddressBar flash microcopy "→ 네이버 쇼핑 최저가로 이동합니다" → "→ 최저가 페이지로 이동합니다" — 일부 키워드가 쿠팡/올리브영 등으로 라우팅되어 브랜드 하드코딩이 부정확.
+
+**의도적으로 적용 보류한 발견 (out-of-scope, 별도 PR로 트래킹):**
+- `HeroStats.todayRedirects = 12394` 정적 placeholder — INTEGRATION.md §3.4가 KV analytics 연동을 별도 작업으로 명시. 시안 HTML 및 핸드오프 React 컴포넌트와 동일 값.
+- eyebrow pill `--accent` on `--accent-soft` 대비 ≈3.7:1 — 디자이너 승인된 브랜드 토큰. 디자인 시스템 차원 이슈.
+- next.config.ts CSP/보안 헤더, app/error.tsx + app/not-found.tsx, `loadData()` 캐싱 — 디자인 핸드오프 범위 밖.
+
+**검증:** 매 라운드 `npm test` 19/19, `npm run build` 통과. 최종 라운드 클린.
+
+---
+
+## 2026-04-30 ~01:00 — Concept A hero 리뷰 피드백 반영
+
+**작업 내용:**
+3개 리뷰 에이전트(코드 리뷰, 디자인 충실도, a11y/SSR) 병렬 점검 결과 4건 수정.
+
+**변경 파일:**
+- `web/components/AddressBar.tsx`
+  - `clearing → typing` 전이에 `setTimeout(..., 200)` 추가 (이전엔 즉시 동기 전이 — 시안 JS의 `delay = 200` 누락).
+  - 장식용 "Enter ↵" pill의 `role="button"`을 제거. `aria-hidden="true"`와 모순됐고 onClick/keydown 핸들러도 없어서 a11y 트리에서 혼란을 일으킴. 실제 제출은 input의 Enter 키가 담당.
+  - 모바일 미디어 쿼리 hook용 `data-bar-inner`/`data-bar-prefix`/`data-bar-url`/`data-bar-go` 속성 추가.
+- `web/app/layout.tsx` — 시안의 JetBrains Mono Google Fonts `<link>` 누락분 추가 (`SF Mono` 폴백 체인이 비-Apple OS에서 무너지던 문제 해소).
+- `web/app/globals.css` — 시안의 `@media (max-width: 720px)` 블록을 data-attribute selector 기반으로 이식 (header 세로 스택, stats 첫 항목 숨김, address bar 패딩/폰트 축소, footer steps gap 축소).
+- `web/app/page.tsx`, `web/components/HeroStats.tsx` — 모바일 스타일 hook용 `data-hero-header`/`data-hero-stats`/`data-stat-total`/`data-hero-steps` 속성.
+
+**기술적 결정:**
+
+### data-attribute selector vs Tailwind 반응형 유틸리티
+- **결정:** 모바일 스타일을 `data-bar-inner` 등의 attribute selector + `@media` CSS로 작성.
+- **이유:** 시안 CSS 그대로 1:1 이식이 간결하고, 컴포넌트 전반에 흩어진 7개 element를 한 곳에서 관리 가능. Tailwind responsive prefix(`max-md:px-4`)로 풀어쓰면 inline JSX가 길어지고 `!important` 오버라이드 의도가 사라짐.
+
+### 보존한 시안 대비 차이점
+- `AddressBar`의 `max-w-[78%]` — 핸드오프 React 컴포넌트에 명시된 값. 시안 HTML(`max-width: 1100px` full)과는 다르나 핸드오프를 정본으로 보고 유지.
+- `FloatingChips`의 chip band 좌표(`40 + r1*H*0.28` 등) — 핸드오프 컴포넌트 값과 일치, 시안 JS와는 다르나 핸드오프 우선.
+- `HeroStats.todayRedirects = 12394` — 핸드오프 INTEGRATION.md가 "정적 placeholder" 명시. KV 분석 연동 시 별도 작업.
+
+**검증:**
+- `npm test` — 19/19 통과
+- `npm run build` — 1056 SSG paths 빌드 성공
+
+---
+
 ## 2026-04-30 ~00:50 — Concept A (Typing) hero 디자인 적용
 
 **작업 내용:**

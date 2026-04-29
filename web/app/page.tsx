@@ -23,7 +23,7 @@ export default async function HomePage() {
   const demoKeywords = pickDemoKeywords(keywordList, 24);
 
   return (
-    <main className="relative min-h-screen overflow-hidden">
+    <main className="relative min-h-screen overflow-x-hidden">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
@@ -35,17 +35,20 @@ export default async function HomePage() {
 
       <FloatingChips keywords={demoKeywords} />
 
-      <header className="absolute top-7 left-10 right-10 z-10 flex items-center justify-between">
+      <header
+        data-hero-header
+        className="absolute top-7 left-10 right-10 z-10 flex items-center justify-between"
+      >
         <a href="/" className="flex items-baseline gap-1.5">
           <span className="text-[22px] font-bold tracking-tight text-[var(--ink)]">가격</span>
           <span className="text-[22px] font-light text-[var(--ink-ghost)]">.kr</span>
         </a>
-        <HeroStats />
+        <HeroStats totalKeywords={keywordList.length} />
       </header>
 
       <section className="relative z-[5] flex min-h-screen flex-col items-center justify-center px-6 py-24">
-        <div
-          className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-semibold"
+        <p
+          className="m-0 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-semibold"
           style={{
             background: "var(--accent-soft)",
             color: "var(--accent)",
@@ -63,7 +66,7 @@ export default async function HomePage() {
             }}
           />
           주소창에 바로 입력하세요
-        </div>
+        </p>
 
         <h1
           className="mt-5 text-center font-extrabold tracking-tight"
@@ -85,17 +88,21 @@ export default async function HomePage() {
       </section>
 
       <footer className="absolute bottom-8 left-10 right-10 z-10 flex items-center justify-between text-[12px] tracking-wider text-[var(--ink-ghost)]">
-        <div className="flex gap-8">
-          <span>
+        <ol
+          data-hero-steps
+          aria-label="이용 단계"
+          className="m-0 flex list-none gap-8 p-0"
+        >
+          <li>
             <strong className="text-[var(--ink)]">01</strong> 입력
-          </span>
-          <span>
+          </li>
+          <li>
             <strong className="text-[var(--ink)]">02</strong> 리다이렉트
-          </span>
-          <span>
+          </li>
+          <li>
             <strong className="text-[var(--ink)]">03</strong> 최저가
-          </span>
-        </div>
+          </li>
+        </ol>
         <div>
           커뮤니티 투표로 만들어가는{" "}
           <a

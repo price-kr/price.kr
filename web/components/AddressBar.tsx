@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 interface AddressBarProps {
   keywords: string[];
@@ -23,9 +23,9 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
   const [userValue, setUserValue] = useState("");
   const [userActive, setUserActive] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const currentKeyword = keywords[keywordIdx % keywords.length] ?? "만두";
+  const currentKeyword =
+    keywords.length > 0 ? keywords[keywordIdx % keywords.length] : "만두";
   const fullUrl = `${currentKeyword}.가격.kr`;
 
   useEffect(() => {
@@ -62,8 +62,12 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
       if (typed.length > 0) {
         timeout = setTimeout(() => setTyped(typed.slice(0, -1)), CLEAR_PER_CHAR);
       } else {
-        setKeywordIdx((i) => (i + 1) % keywords.length);
-        setPhase("typing");
+        timeout = setTimeout(() => {
+          setKeywordIdx((i) =>
+            keywords.length > 0 ? (i + 1) % keywords.length : 0
+          );
+          setPhase("typing");
+        }, 200);
       }
     }
     return () => clearTimeout(timeout);
@@ -85,6 +89,7 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
   };
 
   const onBlur = () => {
+    if (!userActive) return;
     setUserActive(false);
     setUserValue("");
     setTyped("");
@@ -110,12 +115,14 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
   return (
     <div className="w-full max-w-[78%] mx-auto">
       <div
+        data-bar-shell
         className="rounded-[var(--r-lg)] border border-[var(--hairline)] bg-[var(--bg-elev-1)] p-1 transition-shadow duration-300"
         style={{
           boxShadow: isFlash ? "var(--shadow-bar-flash)" : "var(--shadow-bar)",
         }}
       >
         <div
+          data-bar-inner
           className="flex items-center gap-3.5 rounded-[var(--r-md)] px-7 py-6 transition-colors duration-200"
           style={{
             background: isFlash ? "var(--accent-soft)" : "var(--bg-elev-2)",
@@ -127,13 +134,14 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
           </svg>
 
           <span
+            data-bar-prefix
             className="font-mono text-[22px] tracking-tight text-[var(--ink-faint)]"
             aria-hidden="true"
           >
             https://
           </span>
 
-          <div className="relative flex-1 min-h-[50px] flex items-center">
+          <div data-bar-url className="relative flex-1 min-h-[50px] flex items-center">
             {!userActive && (
               <span
                 className="font-mono font-semibold tracking-tight whitespace-nowrap"
@@ -162,7 +170,6 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
 
             {interactive && (
               <input
-                ref={inputRef}
                 type="text"
                 value={userActive ? userValue : ""}
                 onChange={(e) => setUserValue(e.target.value)}
@@ -180,6 +187,9 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
                   color: "var(--ink)",
                   caretColor: "var(--accent)",
                   opacity: userActive ? 1 : 0,
+                  // Reserve space so typed text doesn't slide under the
+                  // ".가격.kr" suffix overlay when the input grows long.
+                  paddingRight: userActive ? "clamp(80px, 9vw, 130px)" : 0,
                 }}
               />
             )}
@@ -199,13 +209,13 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
           </div>
 
           <div
+            data-bar-go
             className="rounded-[var(--r-sm)] text-sm font-semibold flex items-center gap-1.5 transition-all duration-200"
             style={{
               background: isFull || userActive ? "var(--accent)" : "#E8E6E1",
               color: isFull || userActive ? "#fff" : "var(--ink-ghost)",
               padding: "10px 18px",
             }}
-            role="button"
             aria-hidden="true"
           >
             {isFlash ? "이동 중..." : "Enter ↵"}
@@ -216,7 +226,7 @@ export function AddressBar({ keywords, interactive = true }: AddressBarProps) {
       <p className="mt-4 text-center text-[14px] text-[var(--ink-faint)]">
         {isFlash ? (
           <span className="font-semibold text-[var(--accent)]">
-            → 네이버 쇼핑 최저가로 이동합니다
+            → 최저가 페이지로 이동합니다
           </span>
         ) : userActive ? (
           <>
