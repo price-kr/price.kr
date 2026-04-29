@@ -4,6 +4,46 @@
 
 ---
 
+## 2026-04-30 ~00:50 — Concept A (Typing) hero 디자인 적용
+
+**작업 내용:**
+Claude Design 핸드오프 번들(`price-handoff.zip`)의 `production-preview.html` 시안을 Next.js 코드베이스에 이식. 페이지 자체가 거대한 주소창인 컨셉 — 자동 타이핑(typing → full → flash → clearing) 상태머신으로 `{keyword}.가격.kr`을 시연하고 사용자가 focus 시 정지 후 직접 입력 가능.
+
+**변경 파일:**
+- `web/app/globals.css` — 디자인 토큰(색/폰트/라운드/쉐도우) 정의, Tailwind v4 `@theme inline` 매핑, `pulse-dot`/`chip-drift-0..3`/`cursor-blink` keyframes, `prefers-reduced-motion` 분기. 기존 1줄 파일을 전면 교체.
+- `web/app/layout.tsx` — Pretendard CDN preconnect/stylesheet, OG 메타데이터 헤드라인 ("한 단어로 끝나는 최저가 검색")로 교체.
+- `web/components/AddressBar.tsx` — NEW. 자동 타이핑 + focus 시 사용자 입력 모드. `/^[가-힣ㄱ-ㅎa-zA-Z0-9]+$/` 검증 후 `https://{kw}.가격.kr`로 이동.
+- `web/components/FloatingChips.tsx` — NEW. 결정론적 시드(`(i*9301+49297)%233280`) 기반 위치 계산 — SSR/CSR hydration mismatch 없음.
+- `web/components/HeroStats.tsx` — NEW. Server Component. `loadData(getDataDir())`로 등록 키워드 개수 조회.
+- `web/app/page.tsx` — eyebrow 배지 + display 헤드라인 + AddressBar + 01/02/03 stepper로 전면 교체. 기존 `<SearchBar />` 단일 hero는 제거 (SearchBar 컴포넌트 자체는 향후 보조 UI 활용 위해 유지).
+- `docs/DESIGN.md` — NEW. Concept A 디자인 시스템 문서.
+
+**기술적 결정:**
+
+### 1. AddressBar는 Client Component, HeroStats는 Server Component로 분리
+- **결정:** 자동 타이핑 상태머신과 input focus 처리는 클라이언트 전용 → `"use client"`. HeroStats는 빌드/요청 시 `data/`를 읽으므로 서버 전용.
+- **이유:** Hero 자체(page.tsx)는 서버에 두고, 인터랙티브 영역만 클라이언트로 격리해 RSC 트리 절약.
+
+### 2. FloatingChips를 결정론적 시드로 배치
+- **결정:** `useMemo`로 인덱스 기반 시드 계산(`(i*9301+49297)%233280`). 위치/지연 모두 결정적.
+- **이유:** SSR HTML이 안정적으로 chip 24개를 포함해야 첫 페인트에서 배경이 비어 보이지 않음. 시드를 결정적으로 두면 hydration mismatch가 발생하지 않음.
+- **대안:** `Math.random()` — 클라이언트만 렌더, 첫 페인트가 빈 배경.
+
+### 3. Pretendard는 셀프호스팅 대신 jsDelivr CDN
+- **결정:** layout.tsx에서 CDN preconnect + stylesheet 로드.
+- **이유:** 의존성 추가 없이 한글 품질 확보. Vercel Free 환경에서 외부 CDN 캐시 활용.
+- **트레이드오프:** 첫 방문 LCP에 외부 RTT 1회 추가. preconnect로 완화. 추후 LCP 측정 후 self-host 전환 여지.
+
+### 4. 기존 SearchBar는 보존
+- **결정:** `web/components/SearchBar.tsx`는 그대로 두되 hero에선 미노출. `__tests__/page.test.tsx`는 PrivacyPage만 테스트하므로 변경 불필요.
+- **이유:** 별도 PR로 토큰 마이그레이션(`bg-blue-600` → `var(--accent)` 등)을 진행하기 위함. 핸드오프 INTEGRATION.md 권장 사항과 일치.
+
+**검증:**
+- `npm test` — web 19개 모두 통과.
+- `npm run build` — Next.js 15 production build 통과 (1056 SSG paths 포함, `/` 2.58 kB).
+
+---
+
 ## 2026-04-14 ~04:30 — incrementalKvEntries: O(files+changes) index precompute + stale alias delete
 
 **작업 내용:**
