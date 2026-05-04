@@ -4,6 +4,53 @@
 
 ---
 
+## 2026-05-04 ~19:20 — `[keyword]` 페이지 Concept A 디자인 적용
+
+**배경:**
+PR #40에서 landing page만 Concept A "Typing" hero로 마이그레이션되었고, `[keyword]/page.tsx`의 3가지 뷰(alias / canonical / unregistered)는 레거시 Tailwind 토큰(`text-blue-*`, `text-gray-*`, `bg-blue-600`) + 시스템 폰트 + 작은 헤딩으로 남아 있어 landing과 시각적으로 분리된 사이트처럼 느껴짐. PR #40 본문에 out-of-scope로 명시된 항목.
+
+**작업 내용:**
+
+1. **공통 shell 컴포넌트 추출**
+   - `web/components/SiteHeader.tsx` — `가격.kr` 로고 + `<HeroStats>`, `absolute top-7` 포지셔닝.
+   - `web/components/SiteFooter.tsx` — `01/02/03` stepper + 오픈소스 링크. `showSteps` prop으로 키워드 페이지에서는 stepper 숨김.
+   - `web/lib/demoKeywords.ts` — `pickDemoKeywords` 헬퍼 분리 (landing + keyword 페이지 양쪽에서 사용).
+
+2. **`app/[keyword]/page.tsx` 재작성**
+   - 3가지 뷰를 단일 페이지 컴포넌트 + `AliasView` / `CanonicalView` / `UnregisteredView` sub-component로 분리.
+   - 공통 helper: `EyebrowPill` (accent / muted tone), `MonoUrl` (`{accent kw}{ghost .가격.kr}`), `PrimaryCTA` (orange button + `--shadow-bar` + hover scale), `BackLink`.
+   - 모든 뷰가 동일한 shell 사용: `<main relative min-h-screen overflow-x-hidden>` + 라디얼 그라디언트 + `<FloatingChips excludeKeyword={decoded}>` + `<SiteHeader>` + 중앙 정렬 `<section min-h-screen>` + `<SiteFooter showSteps={false}>`.
+   - 카피 변경: "키워드가 아직 등록되지 않았습니다" → "{decoded}는 아직 등록되지 않은 단어입니다" + 후속 문장 "커뮤니티 투표로 등록할 수 있어요. 비슷한 단어부터 둘러볼 수도 있습니다." (행동 유도 톤으로).
+
+3. **데이터 로드 단일화:**
+   기존: alias view는 loadData skip, canonical/unregistered는 각각 호출. 새 구조에서는 모든 뷰가 demo chips를 위해 keyword 리스트를 필요로 하므로 `loadData`를 한 번 호출 후 isAlias/isCanonical 분기에서 `aliases`/`similar`를 조건부 derive. alias 페이지는 1회 추가 walk가 발생하지만 alias 페이지는 SSG로 빌드 시점에 1회만 실행되므로 런타임 영향 없음.
+
+**기술적 결정:**
+
+- **FloatingChips를 키워드 페이지에도 유지** — 처음에는 키워드 페이지에서 제거(노이즈)할까 고민했으나, 미등록 키워드 페이지에서 다른 등록된 키워드들이 배경에 떠 있으면 "이 키워드만 빠진 것" 임을 시각적으로 전달. `excludeKeyword={decoded}`로 현재 키워드는 제외해 의미 충돌 방지. 대안(static list / 제거)은 디자인 일관성 손실.
+- **Footer `showSteps` prop** — landing의 01/02/03 stepper는 "처음 방문자에게 동작 설명" 용도. 이미 키워드 페이지에 도달한 사용자에게는 redundant이므로 prop으로 제어. 하드코딩 분기 대신 prop으로 두어 향후 다른 페이지에서도 재사용 가능.
+- **`PrimaryCTA` hover에 `scale(1.02)` 트랜스폼** — landing의 AddressBar Enter pill과 시각 언어 일치 (둘 다 orange + shadow-bar). 키워드 페이지의 CTA가 단독으로 페이지의 시각 무게중심을 잡아야 해서 미세한 scale 변화가 적절한 affordance.
+- **`<MonoUrl>` 컴포넌트 분리** — `{accent kw}{ghost .가격.kr}` 패턴이 landing AddressBar / 유사키워드 chip / 본문 inline / CTA 등 4개 위치에 반복. 단일 컴포넌트 + `size` prop으로 통일.
+
+**검증:**
+- `cd web && npm test` → 19/19 통과.
+- `cd web && npm run build` → 1056 SSG paths 통과.
+- `npm run dev` 후 `/아이폰` (unregistered) / `/만두` (canonical) / `/은` (alias) 200 OK. HTML grep으로 `text-blue-*` / `text-gray-*` / `bg-blue-*` 0건, `var(--accent)` 26회, FloatingChips 20개 chip-drift 출력 확인.
+
+**의도적 보류 (별도 PR로 트래킹):**
+- `SearchBar.tsx` (현재 미사용) 토큰 마이그레이션 — landing에서 렌더되지 않으므로 제거 또는 보조 UI 도입 결정 후 처리.
+- `app/privacy/page.tsx` — 별도 콘텐츠 페이지로 디자인 시스템 적용 여부 별도 논의.
+
+**상세 검토 후속 수정 (5건):**
+
+1. **한글 조사 자동 선택** — UnregisteredView "{decoded}는 아직..." 헤딩이 `아이폰` 같은 받침 있는 키워드에서 "아이폰는"으로 잘못 표기. `lib/hangul.ts`에 `pickParticle(word, type)` helper 추가 (받침 검사 → 은/는, 이/가, 을/를, 과/와 자동 선택, 비-한글은 "은(는)" fallback). UnregisteredView/AliasView 헤딩 모두 hardcoded "은(는)" → 자동 선택으로 교체. `__tests__/hangul.test.ts` +4건 (총 23/23).
+2. **AliasView CTA 가독성 버그** — `<PrimaryCTA>` 오렌지 배경에 `<MonoUrl>`(키워드를 `var(--accent)` orange로 렌더) 중첩 → orange-on-orange로 키워드가 보이지 않던 문제. CTA 내부에서는 `<MonoUrl>` 대신 plain `<span className="font-mono tracking-tight">`로 렌더해 부모 CTA의 `color: #fff` 상속.
+3. **CanonicalView eyebrow 일관성** — `● 등록된 키워드` 리터럴 ● 문자 사용 → landing의 EyebrowPill처럼 animated `<span>` pulse-dot으로 교체. "live/registered" 의미를 시각적으로 전달.
+4. **CanonicalView 본문 조사 어색함** — "{decoded}.가격.kr 를 입력하면" — 를가 ".kr"에 붙어 음독 시 어색 ("kr를"). "입력 시"로 조사 제거.
+5. **AliasView 헤딩 hardcoded "은(는)"** — `pickParticle(decoded, "topic")`로 자동화.
+
+---
+
 ## 2026-04-30 ~01:30 — Concept A hero 추가 리뷰 라운드 (iter 2–7) 반영
 
 **작업 내용:**

@@ -1,20 +1,9 @@
 import { loadData, getDataDir } from "@/lib/keywords";
+import { pickDemoKeywords } from "@/lib/demoKeywords";
 import { AddressBar } from "@/components/AddressBar";
 import { FloatingChips } from "@/components/FloatingChips";
-import { HeroStats } from "@/components/HeroStats";
-
-function pickDemoKeywords(all: string[], n: number): string[] {
-  const preferred = [
-    "만두", "가방", "iphone", "김치", "커피", "노트북",
-    "운동화", "아이패드", "에어팟", "라면", "치킨", "비타민",
-    "선풍기", "책상", "모니터", "키보드", "맥북", "청바지",
-    "화장품", "향수", "운동복", "안경", "시계", "지갑",
-  ];
-  const set = new Set(all);
-  const filtered = preferred.filter((k) => set.has(k));
-  if (filtered.length >= 6) return filtered.slice(0, n);
-  return all.slice(0, n);
-}
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export default async function HomePage() {
   const dataDir = getDataDir();
@@ -35,16 +24,7 @@ export default async function HomePage() {
 
       <FloatingChips keywords={demoKeywords} />
 
-      <header
-        data-hero-header
-        className="absolute top-7 left-10 right-10 z-10 flex items-center justify-between"
-      >
-        <a href="/" className="flex items-baseline gap-1.5">
-          <span className="text-[22px] font-bold tracking-tight text-[var(--ink)]">가격</span>
-          <span className="text-[22px] font-light text-[var(--ink-ghost)]">.kr</span>
-        </a>
-        <HeroStats totalKeywords={keywordList.length} />
-      </header>
+      <SiteHeader totalKeywords={keywordList.length} />
 
       <section className="relative z-[5] flex min-h-screen flex-col items-center justify-center px-6 py-24">
         <p
@@ -87,34 +67,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <footer className="absolute bottom-8 left-10 right-10 z-10 flex items-center justify-between text-[12px] tracking-wider text-[var(--ink-ghost)]">
-        <ol
-          data-hero-steps
-          aria-label="이용 단계"
-          className="m-0 flex list-none gap-8 p-0"
-        >
-          <li>
-            <strong className="text-[var(--ink)]">01</strong> 입력
-          </li>
-          <li>
-            <strong className="text-[var(--ink)]">02</strong> 리다이렉트
-          </li>
-          <li>
-            <strong className="text-[var(--ink)]">03</strong> 최저가
-          </li>
-        </ol>
-        <div>
-          커뮤니티 투표로 만들어가는{" "}
-          <a
-            href="https://github.com/price-kr/price.kr"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-[var(--ink)] transition-colors"
-          >
-            오픈소스
-          </a>
-        </div>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }
