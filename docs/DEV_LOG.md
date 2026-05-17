@@ -4,6 +4,163 @@
 
 ---
 
+## 2026-05-04 ~19:20 — `[keyword]` 페이지 Concept A 디자인 적용
+
+**배경:**
+PR #40에서 landing page만 Concept A "Typing" hero로 마이그레이션되었고, `[keyword]/page.tsx`의 3가지 뷰(alias / canonical / unregistered)는 레거시 Tailwind 토큰(`text-blue-*`, `text-gray-*`, `bg-blue-600`) + 시스템 폰트 + 작은 헤딩으로 남아 있어 landing과 시각적으로 분리된 사이트처럼 느껴짐. PR #40 본문에 out-of-scope로 명시된 항목.
+
+**작업 내용:**
+
+1. **공통 shell 컴포넌트 추출**
+   - `web/components/SiteHeader.tsx` — `가격.kr` 로고 + `<HeroStats>`, `absolute top-7` 포지셔닝.
+   - `web/components/SiteFooter.tsx` — `01/02/03` stepper + 오픈소스 링크. `showSteps` prop으로 키워드 페이지에서는 stepper 숨김.
+   - `web/lib/demoKeywords.ts` — `pickDemoKeywords` 헬퍼 분리 (landing + keyword 페이지 양쪽에서 사용).
+
+2. **`app/[keyword]/page.tsx` 재작성**
+   - 3가지 뷰를 단일 페이지 컴포넌트 + `AliasView` / `CanonicalView` / `UnregisteredView` sub-component로 분리.
+   - 공통 helper: `EyebrowPill` (accent / muted tone), `MonoUrl` (`{accent kw}{ghost .가격.kr}`), `PrimaryCTA` (orange button + `--shadow-bar` + hover scale), `BackLink`.
+   - 모든 뷰가 동일한 shell 사용: `<main relative min-h-screen overflow-x-hidden>` + 라디얼 그라디언트 + `<FloatingChips excludeKeyword={decoded}>` + `<SiteHeader>` + 중앙 정렬 `<section min-h-screen>` + `<SiteFooter showSteps={false}>`.
+   - 카피 변경: "키워드가 아직 등록되지 않았습니다" → "{decoded}는 아직 등록되지 않은 단어입니다" + 후속 문장 "커뮤니티 투표로 등록할 수 있어요. 비슷한 단어부터 둘러볼 수도 있습니다." (행동 유도 톤으로).
+
+3. **데이터 로드 단일화:**
+   기존: alias view는 loadData skip, canonical/unregistered는 각각 호출. 새 구조에서는 모든 뷰가 demo chips를 위해 keyword 리스트를 필요로 하므로 `loadData`를 한 번 호출 후 isAlias/isCanonical 분기에서 `aliases`/`similar`를 조건부 derive. alias 페이지는 1회 추가 walk가 발생하지만 alias 페이지는 SSG로 빌드 시점에 1회만 실행되므로 런타임 영향 없음.
+
+**기술적 결정:**
+
+- **FloatingChips를 키워드 페이지에도 유지** — 처음에는 키워드 페이지에서 제거(노이즈)할까 고민했으나, 미등록 키워드 페이지에서 다른 등록된 키워드들이 배경에 떠 있으면 "이 키워드만 빠진 것" 임을 시각적으로 전달. `excludeKeyword={decoded}`로 현재 키워드는 제외해 의미 충돌 방지. 대안(static list / 제거)은 디자인 일관성 손실.
+- **Footer `showSteps` prop** — landing의 01/02/03 stepper는 "처음 방문자에게 동작 설명" 용도. 이미 키워드 페이지에 도달한 사용자에게는 redundant이므로 prop으로 제어. 하드코딩 분기 대신 prop으로 두어 향후 다른 페이지에서도 재사용 가능.
+- **`PrimaryCTA` hover에 `scale(1.02)` 트랜스폼** — landing의 AddressBar Enter pill과 시각 언어 일치 (둘 다 orange + shadow-bar). 키워드 페이지의 CTA가 단독으로 페이지의 시각 무게중심을 잡아야 해서 미세한 scale 변화가 적절한 affordance.
+- **`<MonoUrl>` 컴포넌트 분리** — `{accent kw}{ghost .가격.kr}` 패턴이 landing AddressBar / 유사키워드 chip / 본문 inline / CTA 등 4개 위치에 반복. 단일 컴포넌트 + `size` prop으로 통일.
+
+**검증:**
+- `cd web && npm test` → 19/19 통과.
+- `cd web && npm run build` → 1056 SSG paths 통과.
+- `npm run dev` 후 `/아이폰` (unregistered) / `/만두` (canonical) / `/은` (alias) 200 OK. HTML grep으로 `text-blue-*` / `text-gray-*` / `bg-blue-*` 0건, `var(--accent)` 26회, FloatingChips 20개 chip-drift 출력 확인.
+
+**의도적 보류 (별도 PR로 트래킹):**
+- `SearchBar.tsx` (현재 미사용) 토큰 마이그레이션 — landing에서 렌더되지 않으므로 제거 또는 보조 UI 도입 결정 후 처리.
+- `app/privacy/page.tsx` — 별도 콘텐츠 페이지로 디자인 시스템 적용 여부 별도 논의.
+
+**상세 검토 후속 수정 (5건):**
+
+1. **한글 조사 자동 선택** — UnregisteredView "{decoded}는 아직..." 헤딩이 `아이폰` 같은 받침 있는 키워드에서 "아이폰는"으로 잘못 표기. `lib/hangul.ts`에 `pickParticle(word, type)` helper 추가 (받침 검사 → 은/는, 이/가, 을/를, 과/와 자동 선택, 비-한글은 "은(는)" fallback). UnregisteredView/AliasView 헤딩 모두 hardcoded "은(는)" → 자동 선택으로 교체. `__tests__/hangul.test.ts` +4건 (총 23/23).
+2. **AliasView CTA 가독성 버그** — `<PrimaryCTA>` 오렌지 배경에 `<MonoUrl>`(키워드를 `var(--accent)` orange로 렌더) 중첩 → orange-on-orange로 키워드가 보이지 않던 문제. CTA 내부에서는 `<MonoUrl>` 대신 plain `<span className="font-mono tracking-tight">`로 렌더해 부모 CTA의 `color: #fff` 상속.
+3. **CanonicalView eyebrow 일관성** — `● 등록된 키워드` 리터럴 ● 문자 사용 → landing의 EyebrowPill처럼 animated `<span>` pulse-dot으로 교체. "live/registered" 의미를 시각적으로 전달.
+4. **CanonicalView 본문 조사 어색함** — "{decoded}.가격.kr 를 입력하면" — 를가 ".kr"에 붙어 음독 시 어색 ("kr를"). "입력 시"로 조사 제거.
+5. **AliasView 헤딩 hardcoded "은(는)"** — `pickParticle(decoded, "topic")`로 자동화.
+
+---
+
+## 2026-04-30 ~01:30 — Concept A hero 추가 리뷰 라운드 (iter 2–7) 반영
+
+**작업 내용:**
+`/loop` self-paced 검토 루프를 통해 6 라운드 추가 점검. 매 라운드 fresh agent 1–3개를 병렬 dispatch하여 확신도 높은 발견만 수정. "2회 연속 클린"에서 자동 종료. 누적 13건 수정.
+
+**iter 2 (3건):** AddressBar `clearing→typing` 200ms 지연, `role="button"` + `aria-hidden` 모순 제거, JetBrains Mono Google Fonts CDN, 모바일 `@media (max-width: 720px)` 이식 (data-attribute selector). *— iter 1에서 이미 커밋됨.*
+
+**iter 3 (4건):**
+- AddressBar onBlur가 `userActive=false` 상태에서도 자동 애니메이션 state를 리셋하던 버그 — `if (!userActive) return` guard.
+- layout.tsx — `fonts.googleapis.com` preconnect 누락 추가 (gstatic만 있던 상태).
+- globals.css 모바일 `@media` — `[data-bar-url]` 컨테이너 `font-size`가 자식 inline-style로 cascade되지 않던 문제 → `[data-bar-url] > span, > input` 자식 셀렉터로 교체.
+- page.tsx — `HeroStats`에 `totalKeywords={keywordList.length}` prop pass-through, `loadData()` 이중 walk 제거.
+
+**iter 4 (3건):**
+- AddressBar — `keywords=[]`일 때 `% 0 = NaN` 가드 (`currentKeyword` + `setKeywordIdx` 양쪽).
+- 미사용 `inputRef` + `useRef` import 제거.
+- user-active input에 `paddingRight: clamp(80px, 9vw, 130px)` — `.가격.kr` absolute 접미사가 입력 텍스트를 시각적으로 덮던 문제.
+
+**iter 5 (2건):**
+- globals.css — `[data-bar-shell]:has(input:focus-visible)` 키보드 포커스 링 (input의 `outline-none` 보완, WCAG 2.4.7). `data-bar-shell` 속성을 wrapper에 부여.
+- page.tsx — `<main overflow-hidden>` → `overflow-x-hidden`. 작은 뷰포트(≤320×568)에서 콘텐츠가 100vh 초과 시 스크롤 가능.
+
+**iter 6 (3건):**
+- globals.css — `input:focus-visible` 글로벌 스타일을 `[data-bar-shell] input:focus-visible`로 스코프 (orange accent ring이 SearchBar의 blue Tailwind ring으로 누출 방지).
+- page.tsx — eyebrow `<div>` → `<p className="m-0 ...">` (시맨틱).
+- page.tsx — 푸터 01/02/03 stepper `<div>/<span>` → `<ol aria-label="이용 단계"><li>x3</li></ol>` (`list-none`/`m-0`/`p-0`로 시각 동일).
+
+**iter 7 (1건):**
+- AddressBar flash microcopy "→ 네이버 쇼핑 최저가로 이동합니다" → "→ 최저가 페이지로 이동합니다" — 일부 키워드가 쿠팡/올리브영 등으로 라우팅되어 브랜드 하드코딩이 부정확.
+
+**의도적으로 적용 보류한 발견 (out-of-scope, 별도 PR로 트래킹):**
+- `HeroStats.todayRedirects = 12394` 정적 placeholder — INTEGRATION.md §3.4가 KV analytics 연동을 별도 작업으로 명시. 시안 HTML 및 핸드오프 React 컴포넌트와 동일 값.
+- eyebrow pill `--accent` on `--accent-soft` 대비 ≈3.7:1 — 디자이너 승인된 브랜드 토큰. 디자인 시스템 차원 이슈.
+- next.config.ts CSP/보안 헤더, app/error.tsx + app/not-found.tsx, `loadData()` 캐싱 — 디자인 핸드오프 범위 밖.
+
+**검증:** 매 라운드 `npm test` 19/19, `npm run build` 통과. 최종 라운드 클린.
+
+---
+
+## 2026-04-30 ~01:00 — Concept A hero 리뷰 피드백 반영
+
+**작업 내용:**
+3개 리뷰 에이전트(코드 리뷰, 디자인 충실도, a11y/SSR) 병렬 점검 결과 4건 수정.
+
+**변경 파일:**
+- `web/components/AddressBar.tsx`
+  - `clearing → typing` 전이에 `setTimeout(..., 200)` 추가 (이전엔 즉시 동기 전이 — 시안 JS의 `delay = 200` 누락).
+  - 장식용 "Enter ↵" pill의 `role="button"`을 제거. `aria-hidden="true"`와 모순됐고 onClick/keydown 핸들러도 없어서 a11y 트리에서 혼란을 일으킴. 실제 제출은 input의 Enter 키가 담당.
+  - 모바일 미디어 쿼리 hook용 `data-bar-inner`/`data-bar-prefix`/`data-bar-url`/`data-bar-go` 속성 추가.
+- `web/app/layout.tsx` — 시안의 JetBrains Mono Google Fonts `<link>` 누락분 추가 (`SF Mono` 폴백 체인이 비-Apple OS에서 무너지던 문제 해소).
+- `web/app/globals.css` — 시안의 `@media (max-width: 720px)` 블록을 data-attribute selector 기반으로 이식 (header 세로 스택, stats 첫 항목 숨김, address bar 패딩/폰트 축소, footer steps gap 축소).
+- `web/app/page.tsx`, `web/components/HeroStats.tsx` — 모바일 스타일 hook용 `data-hero-header`/`data-hero-stats`/`data-stat-total`/`data-hero-steps` 속성.
+
+**기술적 결정:**
+
+### data-attribute selector vs Tailwind 반응형 유틸리티
+- **결정:** 모바일 스타일을 `data-bar-inner` 등의 attribute selector + `@media` CSS로 작성.
+- **이유:** 시안 CSS 그대로 1:1 이식이 간결하고, 컴포넌트 전반에 흩어진 7개 element를 한 곳에서 관리 가능. Tailwind responsive prefix(`max-md:px-4`)로 풀어쓰면 inline JSX가 길어지고 `!important` 오버라이드 의도가 사라짐.
+
+### 보존한 시안 대비 차이점
+- `AddressBar`의 `max-w-[78%]` — 핸드오프 React 컴포넌트에 명시된 값. 시안 HTML(`max-width: 1100px` full)과는 다르나 핸드오프를 정본으로 보고 유지.
+- `FloatingChips`의 chip band 좌표(`40 + r1*H*0.28` 등) — 핸드오프 컴포넌트 값과 일치, 시안 JS와는 다르나 핸드오프 우선.
+- `HeroStats.todayRedirects = 12394` — 핸드오프 INTEGRATION.md가 "정적 placeholder" 명시. KV 분석 연동 시 별도 작업.
+
+**검증:**
+- `npm test` — 19/19 통과
+- `npm run build` — 1056 SSG paths 빌드 성공
+
+---
+
+## 2026-04-30 ~00:50 — Concept A (Typing) hero 디자인 적용
+
+**작업 내용:**
+Claude Design 핸드오프 번들(`price-handoff.zip`)의 `production-preview.html` 시안을 Next.js 코드베이스에 이식. 페이지 자체가 거대한 주소창인 컨셉 — 자동 타이핑(typing → full → flash → clearing) 상태머신으로 `{keyword}.가격.kr`을 시연하고 사용자가 focus 시 정지 후 직접 입력 가능.
+
+**변경 파일:**
+- `web/app/globals.css` — 디자인 토큰(색/폰트/라운드/쉐도우) 정의, Tailwind v4 `@theme inline` 매핑, `pulse-dot`/`chip-drift-0..3`/`cursor-blink` keyframes, `prefers-reduced-motion` 분기. 기존 1줄 파일을 전면 교체.
+- `web/app/layout.tsx` — Pretendard CDN preconnect/stylesheet, OG 메타데이터 헤드라인 ("한 단어로 끝나는 최저가 검색")로 교체.
+- `web/components/AddressBar.tsx` — NEW. 자동 타이핑 + focus 시 사용자 입력 모드. `/^[가-힣ㄱ-ㅎa-zA-Z0-9]+$/` 검증 후 `https://{kw}.가격.kr`로 이동.
+- `web/components/FloatingChips.tsx` — NEW. 결정론적 시드(`(i*9301+49297)%233280`) 기반 위치 계산 — SSR/CSR hydration mismatch 없음.
+- `web/components/HeroStats.tsx` — NEW. Server Component. `loadData(getDataDir())`로 등록 키워드 개수 조회.
+- `web/app/page.tsx` — eyebrow 배지 + display 헤드라인 + AddressBar + 01/02/03 stepper로 전면 교체. 기존 `<SearchBar />` 단일 hero는 제거 (SearchBar 컴포넌트 자체는 향후 보조 UI 활용 위해 유지).
+- `docs/DESIGN.md` — NEW. Concept A 디자인 시스템 문서.
+
+**기술적 결정:**
+
+### 1. AddressBar는 Client Component, HeroStats는 Server Component로 분리
+- **결정:** 자동 타이핑 상태머신과 input focus 처리는 클라이언트 전용 → `"use client"`. HeroStats는 빌드/요청 시 `data/`를 읽으므로 서버 전용.
+- **이유:** Hero 자체(page.tsx)는 서버에 두고, 인터랙티브 영역만 클라이언트로 격리해 RSC 트리 절약.
+
+### 2. FloatingChips를 결정론적 시드로 배치
+- **결정:** `useMemo`로 인덱스 기반 시드 계산(`(i*9301+49297)%233280`). 위치/지연 모두 결정적.
+- **이유:** SSR HTML이 안정적으로 chip 24개를 포함해야 첫 페인트에서 배경이 비어 보이지 않음. 시드를 결정적으로 두면 hydration mismatch가 발생하지 않음.
+- **대안:** `Math.random()` — 클라이언트만 렌더, 첫 페인트가 빈 배경.
+
+### 3. Pretendard는 셀프호스팅 대신 jsDelivr CDN
+- **결정:** layout.tsx에서 CDN preconnect + stylesheet 로드.
+- **이유:** 의존성 추가 없이 한글 품질 확보. Vercel Free 환경에서 외부 CDN 캐시 활용.
+- **트레이드오프:** 첫 방문 LCP에 외부 RTT 1회 추가. preconnect로 완화. 추후 LCP 측정 후 self-host 전환 여지.
+
+### 4. 기존 SearchBar는 보존
+- **결정:** `web/components/SearchBar.tsx`는 그대로 두되 hero에선 미노출. `__tests__/page.test.tsx`는 PrivacyPage만 테스트하므로 변경 불필요.
+- **이유:** 별도 PR로 토큰 마이그레이션(`bg-blue-600` → `var(--accent)` 등)을 진행하기 위함. 핸드오프 INTEGRATION.md 권장 사항과 일치.
+
+**검증:**
+- `npm test` — web 19개 모두 통과.
+- `npm run build` — Next.js 15 production build 통과 (1056 SSG paths 포함, `/` 2.58 kB).
+
+---
+
 ## 2026-04-14 ~04:30 — incrementalKvEntries: O(files+changes) index precompute + stale alias delete
 
 **작업 내용:**

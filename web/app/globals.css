@@ -1,1 +1,188 @@
 @import "tailwindcss";
+
+/* ============================================================
+   가격.kr — Design Tokens (Concept A: Typing)
+   ============================================================ */
+:root {
+  --bg: #FAF8F4;
+  --bg-elev-1: #FFFFFF;
+  --bg-elev-2: #FAFAF8;
+  --ink: #1A1815;
+  --ink-mute: #555555;
+  --ink-faint: #888888;
+  --ink-ghost: #999999;
+  --accent: #E55A2B;
+  --accent-soft: #FFF4EE;
+  --chip-ink: rgba(26, 24, 21, 0.18);
+  --chip-accent: rgba(229, 90, 43, 0.25);
+  --hairline: rgba(0, 0, 0, 0.06);
+
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --shadow-bar: 0 24px 80px -20px rgba(0, 0, 0, 0.18), 0 8px 24px rgba(0, 0, 0, 0.04);
+  --shadow-bar-flash: 0 0 0 6px rgba(229, 90, 43, 0.25),
+    0 24px 80px -20px rgba(229, 90, 43, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev-1: var(--bg-elev-1);
+  --color-bg-elev-2: var(--bg-elev-2);
+  --color-ink: var(--ink);
+  --color-ink-mute: var(--ink-mute);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-ghost: var(--ink-ghost);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-pill: var(--r-pill);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes chip-drift-0 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(8px, -10px);
+  }
+}
+@keyframes chip-drift-1 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-12px, 6px);
+  }
+}
+@keyframes chip-drift-2 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(6px, 12px);
+  }
+}
+@keyframes chip-drift-3 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-8px, -8px);
+  }
+}
+
+@keyframes cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Keyboard focus ring — input has outline-none for design,
+   so paint the focus state on the bar shell instead.
+   Scoped to [data-bar-shell] so it doesn't leak into SearchBar
+   or any other input on the site. */
+[data-bar-shell]:has(input:focus-visible) {
+  box-shadow: var(--shadow-bar-flash) !important;
+}
+[data-bar-shell] input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Hero mobile rules — ported from production-preview.html @media (max-width: 720px) */
+@media (max-width: 720px) {
+  /* Header stacks vertically and the first stat hides to make room */
+  [data-hero-header] {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  [data-hero-stats] {
+    font-size: 11px;
+    gap: 10px;
+  }
+  [data-hero-stats] [data-stat-total] {
+    display: none;
+  }
+
+  /* Address bar shrinks paddings + font sizes */
+  [data-bar-inner] {
+    padding: 16px 18px !important;
+    gap: 8px !important;
+    flex-wrap: wrap;
+  }
+  [data-bar-prefix] {
+    font-size: 14px !important;
+  }
+  [data-bar-url] {
+    min-height: 32px !important;
+  }
+  /* Children carry inline font-size styles — override them, not the container */
+  [data-bar-url] > span,
+  [data-bar-url] > input {
+    font-size: 20px !important;
+  }
+  [data-bar-go] {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+  }
+
+  /* Footer step strip */
+  [data-hero-steps] {
+    gap: 14px;
+    font-size: 11px;
+  }
+}
